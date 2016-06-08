@@ -1,0 +1,16 @@
+name: Numeric Jungle
+url: 'https://seanschang.github.io/blog'
+description: "Sean's blog"
+
+exclude: [Gemfile, Gemfile.lock, README.md]
+markdown: kramdown
+
+author: 'Shih-Han Sean Chang'
+
+gems:
+  - jekyll-gist
+  - jekyll-sitemap
+
+sass:
+    sass_dir: _sass
+    style: :compressed
