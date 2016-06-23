@@ -54,3 +54,14 @@ import subprocess
 subprocess.call("./follow_up_process.sh", shell=True)
 {% endhighlight %}
 
+or
+```
+    cmd = 'aws s3 cp --quiet {file}.html '\
+          .format(file=model_name) + target_path
+
+    exit_status = os.system(cmd)
+    logging.info('executed command ' + cmd)
+    if exit_status != 0:
+        raise Exception("Failed to execute cmd %s" % cmd)
+```
+
