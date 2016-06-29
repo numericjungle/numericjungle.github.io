@@ -1,8 +1,8 @@
 ---
 date: Sunday, 12. June 2016 04:58PM
 layout: post
-title: python tricks
-description: python tricks
+title: Python tricks
+description: Python tricks
 tags: python data-science
 comments: true
 ---
