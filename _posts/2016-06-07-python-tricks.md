@@ -26,6 +26,9 @@ then go to ```http://localhost:8888/nbextension/``` to check which extension you
 personally, I like the sketchpad very much - by typing ```ctrl+B```,  a scratchpad will pop up, it's a good place for checking current variables, quick plot or run a few lines of codes without insert a cell then delete it after use. A demo looks like this:
 
 
+<!--excerpt-->
+
+
 
 
 

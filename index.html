@@ -8,13 +8,6 @@ sitemap:
 <div id="home">
   {% for post in site.posts %}
 
-
-      <ul class="tag-box inline">
-        {% for tag in post.tags %}
-        <li><a href="#{{ tag | cgi_escape }}">{{ tag }} <span>{{ site.tags[tag] | size }}</span></a></li>
-       {% endfor %}
-      </ul>
-
 <!--
         <ul class="tags">
         {% for tag in post.tags %}
@@ -22,7 +15,6 @@ sitemap:
         {% endfor %}
         </ul>
 -->
-
       <div class="post">
         <h1 class="post-title">
           <a href="{{ post.url }}" rel="bookmark" title="Permalink to {{ post.title }}">{{ post.title }}</a>
@@ -33,14 +25,25 @@ sitemap:
           {{ post.date | date_to_long_string }}
         </span>
 -->
+      <ul class="tag-box inline">
+        {% for tag in post.tags %}
+        <li><a href="#{{ tag | cgi_escape }}">{{ tag }} <span>{{ site.tags[tag] | size }}</span></a></li>
+       {% endfor %}
+      </ul>
+
+
         <span class="post-date">
         <i class="fa fa-calendar"></i>
        {{ post.date | date_to_long_string }}
         </span>
-       
+
         <!-- Excerpt -->
         {{ post.excerpt }}
-        <a class="continue-reading" href="{{ post.url }}" rel="bookmark" title="Permalink to {{ post.title }}">Continue Reading...</a>
+        {% if post.content contains site.excerpt_separator %}
+           <!--<a href="{{ site.baseurl }}{{ post.url }}">Read more</a>-->
+           <a class="continue-reading" href="{{ post.url }}" rel="bookmark" title="Permalink to {{ post.title }}">Continue Reading...</a>
+        {% endif %}
+        
       </div>
   {% endfor %}
   
