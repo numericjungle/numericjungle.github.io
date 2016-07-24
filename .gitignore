@@ -1,5 +1,6 @@
 .jekyll-metadata
 .sass-cache
+run_server.sh
 Gemfile.lock
 _site
 _drafts
