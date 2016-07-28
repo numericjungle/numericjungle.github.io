@@ -4,3 +4,4 @@ run_server.sh
 Gemfile.lock
 _site
 _drafts
+_templates

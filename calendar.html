@@ -1,0 +1,21 @@
+---
+layout: page
+title: Calendar
+description: "An archive of posts sorted by dates."
+---
+{% for post in site.posts %}
+
+    {% capture day %}{{ post.date | date: '%m%Y' }}{% endcapture %}
+    {% capture nday %}{{ post.next.date | date: '%m%Y' }}{% endcapture %}
+
+    {% if day != nday %}
+        <h5 class="date">{{ post.date | date: "%B %Y" }}</h5>
+    {% endif %}
+    
+    <li itemscope>
+    <span class="entry-date">
+    </span> &raquo; {% if post.category == "speaking" %} {% endif %}<a href="{{ post.url }}">{{ post.title }}</a>
+    </li>
+  
+
+{% endfor %}
