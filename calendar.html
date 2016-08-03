@@ -1,6 +1,6 @@
 ---
 layout: page
-title: calendar
+title: Calendar
 description: "An archive of posts sorted by dates."
 ---
 {% for post in site.posts %}
@@ -9,11 +9,18 @@ description: "An archive of posts sorted by dates."
     {% capture nday %}{{ post.next.date | date: '%m%Y' }}{% endcapture %}
 
     {% if day != nday %}
-        <h5 class="date">{{ post.date | date: "%B %Y" }}</h5>
+        <h3 class="date">{{ post.date | date: "%B %Y" }}</h5>
     {% endif %}
     
     <li itemscope>
-    <span class="entry-date">
+    {% assign d = post.date | date: "%-d"  %}
+    {% case d %}
+      {% when '1' or '21' or '31' %}{{ d }}st
+      {% when '2' or '12' or '22' %}{{ d }}nd
+      {% when '3' or '13' or 23' %}{{ d }}rd
+      {% else %}{{ d }}th
+      {% endcase %}    
+  <span class="entry-date">
     </span> &raquo; {% if post.category == "speaking" %} {% endif %}<a href="{{ post.url }}">{{ post.title }}</a>
     </li>
   

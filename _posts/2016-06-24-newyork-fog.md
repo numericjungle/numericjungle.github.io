@@ -1,9 +1,9 @@
 ---
 date: 2016-06-24 21:57:47.812116
 layout: post
-title: New York fog
+title: Foggy NYC
 description: ""
-tags: [newyork]
+tags: [newyork, travel]
 comments: true
 ---
 

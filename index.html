@@ -24,7 +24,8 @@ sitemap:
           <svg class="icon-calendar"></svg>
           {{ post.date | date_to_long_string }}
         </span>
--->
+--> 
+  
       <ul class="tag-box inline">
         {% for tag in post.tags %}
         <li><a href="#{{ tag | cgi_escape }}">{{ tag }} <span>{{ site.tags[tag] | size }}</span></a></li>
