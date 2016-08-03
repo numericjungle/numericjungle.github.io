@@ -8,4 +8,3 @@ comments: true
 ---
 <iframe src="https://docs.google.com/presentation/d/1LEOnhT-1j6ug-qHReRXjFbua5K6oQqA3fjkpyWn3JRE/embed?start=false&loop=false&delayms=30000" frameborder="0" width="640" height="389" allowfullscreen="true" mozallowfullscreen="true" webkitallowfullscreen="true"></iframe>
 <br>
-<!--excerpt-->
