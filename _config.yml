@@ -1,5 +1,5 @@
 name: Numeric Jungle
-url: 'https://seanschang.github.io/blog'
+url: 'https://numericjungle.github.io'
 description: "Sean's blog"
 
 exclude: [Gemfile, Gemfile.lock, README.md]
