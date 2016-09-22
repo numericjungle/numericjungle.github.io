@@ -3,7 +3,7 @@ date: 2016-09-13 22:43:13.776238
 layout: post
 title: Remote control and screen sharing of Ubuntu
 description: "ubuntu_share_screen"
-tags: []
+tags: [installation, software]
 comments: true
 ---
 ![](/images/2016/chicken.jpg){: .center-image }

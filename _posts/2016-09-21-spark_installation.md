@@ -3,7 +3,7 @@ date: 2016-09-21 21:59:51.950977
 layout: post
 title: How to install Spark on Mac & Ubunbu
 description: "spark_installation"
-tags: [spark, installation]
+tags: [spark, installation, software]
 comments: true
 ---
 Install Spark is handy, here a quick guide on Spark installation on Mac and Ubuntu. 
