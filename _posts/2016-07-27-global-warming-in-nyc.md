@@ -1,14 +1,12 @@
 ---
 date: 2016-07-27 00:10:59.442103
 layout: post
-title: Global warming in NYC? 
+title: NYC temperature animation
 description: "NYC_temperature_animation"
 tags: [data-science, data-visualization]
 comments: true
 ---
-NYC is unbearably hot recently. Out of curiosity, I was thinking if NYC today is hotter than 40 years ago? To answer this question, I looked up the NYC historical weather data. Luckily, Weatherspark collects temperature, precipitation, humidity and other weather data since 1949, plus a few EDA plots.
-
-In particular, a heatmap showing hourly temperature by year looks very impressive. I thought it would be more insightful to have an animation showing the heatmap evolves since 1940. Here's the result:
+NYC is unbearably hot recently. Out of curiosity, I looked up the NYC historical weather data and created a heatmap showing hourly temperature every year since 1940s:
 
 
 ![pic tag](/images/2016/nyc_heatmap_animation_225.gif){: .center-image }
@@ -42,7 +40,7 @@ for year in range(1949,2016):
     draw.text((290, 175), year,(0,0,0))
     img.save('{year}.png'.format(year=year), "png")
 ```
-Conclusions so far? Days with extreme temperatures seem to occur frequently in 1970s and 2000s, but the frequency trend definitely does not increase monotonically over the past 60 years. 
+Conclusions so far? Days with extreme temperatures seem to occur frequently in 1970s and 2000s, but the frequency trend definitely does not increase monotonically over the past 60 years.
 
 More analysis coming up...
 
