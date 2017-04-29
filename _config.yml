@@ -5,7 +5,7 @@ description: "Sean's blog"
 exclude: [Gemfile, Gemfile.lock, README.md]
 markdown: kramdown
 
-author: 'Shih-Han Sean Chang'
+author: 'Sean Chang'
 
 gems:
   - jekyll-gist
