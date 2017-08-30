@@ -7,16 +7,16 @@ tags: [python]
 comments: true
 ---
 
-This is a demo of email thread generator based on Google Gmail API. It can <br/>
-1. Send N email with different title<br/>
-2. Create an email thread with N conversations (i.e. grouping N emails together)
-to Gmail or Outlook accounts (only tested on these two providers).
+This is a demo of email thread generator based from Gmail to Gmail/ Outlook. It can <br/>
+1. Send N email with different titles.<br/>
+2. Create an email thread with N conversations (i.e. grouping N emails
+   together).<br/>
 
 
 Prerequisite: <br>
-Check out [Gmail API quickstart](https://developers.google.com/gmail/api/quickstart/python) to authorize Gmail API usage and save the private key file *client_secret.json* in your working directory.
+Check out [Gmail API quickstart](https://developers.google.com/gmail/api/quickstart/python) to authorize API usage and save the private key file *client_secret.json* in your working directory.
 
-Usage:
+Syntax:
 {% highlight python %}
 #create 5 emails all with different title
 python sender.py --to youralias@gmail.com --num_threads 5 
@@ -27,10 +27,10 @@ python sender.py --to youralias@gmail.com --num_threads 5
 python sender.py --to youralias@gmail.com --num_conversations 10 
 {% endhighlight %}
 
-P.S. Since Outlook classifies emails a little different, in order to make the conversational thread work, a user needs to copy to message ID from the first email. Command line message will guide it).
+Since Outlook classifies emails a little different, to make the conversational thread work, a user needs to copy to message ID from the first email. Command line message will provide a step by step guide.
 
-Here's the *sender.py* script:
 {% highlight python %}
+# sender.py
 import httplib2
 import os
 import oauth2client
@@ -39,7 +39,6 @@ import base64
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from apiclient import errors, discovery
-from email.utils import make_msgid
 
 SCOPES = 'https://www.googleapis.com/auth/gmail.send'
 CLIENT_SECRET_FILE = 'client_secret.json'
@@ -116,7 +115,6 @@ if __name__ == '__main__':
     sender = "youralias@gmail.com"
     msgHtml, msgPlain= "bar", "foo"
     is_gmail = 'gmail' in args.to
-    print('is gmail?', is_gmail)
 
     for i in range(args.num_threads):
         subject = args.title + (str(i) if i>0 else '')
