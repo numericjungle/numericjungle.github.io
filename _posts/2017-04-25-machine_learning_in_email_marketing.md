@@ -1,7 +1,7 @@
 ---
 date: 2017-04-25 07:39:17.290588
 layout: post
-title: Machine Learning in Email Marketing
+title: Predictive Modelling & Recommendation system in Email Marketing
 description: "machine_learning_in_email_marketing"
 tags: [data-science, machine-learning, slides]
 comments: true

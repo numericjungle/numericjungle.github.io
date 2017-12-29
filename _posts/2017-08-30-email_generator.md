@@ -7,14 +7,18 @@ tags: [python]
 comments: true
 ---
 
-This is a demo of email thread generator based from Gmail to Gmail/ Outlook. It can <br/>
-1. Send N email with different titles.<br/>
-2. Create an email thread with N conversations (i.e. grouping N emails
+This is a demo of email thread generator based from Gmail to Gmail and Outlook. It can 
+
+* Send N email with different titles.<br/>
+* Create an email thread with N conversations (i.e. grouping N emails
    together).<br/>
 
+Prerequisite:
 
-Prerequisite: <br>
-Check out [Gmail API quickstart](https://developers.google.com/gmail/api/quickstart/python) to authorize API usage and save the private key file *client_secret.json* in your working directory.
+* Check out [Gmail API quickstart](https://developers.google.com/gmail/api/quickstart/python) to authorize API usage and save the private key file *client_secret.json* in your working directory.
+
+
+<!--excerpt-->
 
 Syntax:
 {% highlight python %}

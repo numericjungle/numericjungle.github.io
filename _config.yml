@@ -1,6 +1,6 @@
 name: Numeric Jungle
 url: 'https://numericjungle.github.io'
-description: "Sean's blog"
+description: ""
 
 exclude: [Gemfile, Gemfile.lock, README.md]
 markdown: kramdown
