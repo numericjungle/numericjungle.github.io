@@ -3,7 +3,7 @@ date: 2016-11-10 16:11:17.336996
 layout: post
 title: Baroque style on St Paul's Cathedral
 description: "neural_style"
-tags: [data-visualization, deep-learning, data-science, machine-learning, London]
+tags: [data visualization, deep learning, data science, machine learning]
 comments: true
 ---
 This is an application of [A Neural Algorithm of Artistic Style](https://arxiv.org/abs/1508.06576) by Leon A. Gatys, Alexander S. Ecker, and Matthias Bethge, ran on GPU (GTX-980). 

@@ -3,7 +3,7 @@ date: 2016-06-24 21:57:47.812116
 layout: post
 title: Foggy NYC
 description: ""
-tags: [newyork, travel]
+tags: [travel]
 comments: true
 ---
 

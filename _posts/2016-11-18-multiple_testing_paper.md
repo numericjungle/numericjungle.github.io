@@ -3,7 +3,7 @@ date: 2016-11-18 06:55:44.803916
 layout: post
 title: Interfaces between Bayesian and Frequentist Multiple Testing
 description: "Multiple testing paper"
-tags: [paper, data-science, statistics, slides]
+tags: [paper, data science, statistics, slides]
 comments: true
 ---
 

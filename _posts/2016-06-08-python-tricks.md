@@ -3,7 +3,7 @@ date: Sunday, 12. June 2016 04:58PM
 layout: post
 title: Python tricks
 description: Python tricks
-tags: python data-science
+tags: [python, data science]
 comments: true
 ---
 

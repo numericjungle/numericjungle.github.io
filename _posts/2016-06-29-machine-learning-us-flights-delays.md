@@ -3,7 +3,7 @@ date: 2016-06-29 17:56:23.151500
 layout: post
 title: Machine Learning US airline delays
 description: 
-tags: [machine-learning, data-science, slides]
+tags: [machine learning, data science, slides]
 comments: true
 ---
 
