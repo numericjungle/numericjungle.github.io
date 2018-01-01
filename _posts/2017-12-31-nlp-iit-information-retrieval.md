@@ -7,9 +7,6 @@ tags: [NLP, information retrieval, machine learning]
 comments: true
 ---
 
-
-
-
 ### Informational retrieval  (lecture by [ARNAB BHATTACHARYA](https://nlpsummerschool2017.wordpress.com/schedule/))
 * Retrieval (finding) of information (e.g., documents) that is mostly unstructured (e.g., text) and is relevant to 
 * Tokenization is the process of breaking the text into terms.
@@ -29,6 +26,5 @@ comments: true
   - Build layers, each layer populates docs whose tf for the term > a threshold
 
 <img width="616" alt="screen shot 2017-12-31 at 12 48 08 pm" src="https://user-images.githubusercontent.com/5177427/34464154-e2ad66b8-ee28-11e7-938c-08849b4ebd9b.png">
-
 
 <!--excerpt-->

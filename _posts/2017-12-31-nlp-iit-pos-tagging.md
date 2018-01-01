@@ -3,7 +3,7 @@ date: 2017-12-31 15:04:56.824688
 layout: post
 title: NLP IIT POS tagging
 description: "NLP IIT POS tagging"
-tags: [NLP, machine learning, POS tagging]
+tags: [NLP, machine learning, POS tagging, deep learning]
 comments: true
 ---
 ### NLP POS-tagging (lecture by [Pushpak Bhattacharyya](https://nlpsummerschool2017.wordpress.com/schedule/))
@@ -19,7 +19,10 @@ comments: true
   - Pragmatic Ambiguity
 
 <img width="336" alt="screen shot 2017-12-31 at 12 57 24 pm" src="https://user-images.githubusercontent.com/5177427/34464178-3ed0dc12-ee2a-11e7-8a9f-95fa73302487.png">
-<!--excerpt-->
+<!--excrept-->
+<img width="389" alt="screen shot 2017-12-31 at 12 57 32 pm" src="https://user-images.githubusercontent.com/5177427/34464177-3e247a76-ee2a-11e7-93cc-3c5a3762727a.png">
+
+
 * Main methodology
   - A: extract parts & features
   - B: which is in correspondence with A: extract parts and features
@@ -32,6 +35,7 @@ comments: true
 * A word can have multiple POS tags
 * New examples break rules, so we need a robust system.
 * Generative: HMM
+  - <img width="606" alt="screen shot 2017-12-31 at 2 10 46 pm" src="https://user-images.githubusercontent.com/5177427/34464455-7182f366-ee34-11e7-8e01-873eedc1b79c.png">
   - Training: Maximize the likelihood of observations
   - Testing: search the best POS tag sequence in the hypothesis space
   - generate POS tag sequences and score them
@@ -43,7 +47,7 @@ comments: true
   - Training: Maximize entropy of probability distribution subject to the constraints from data
   - Testing: discriminate amongst hypotheses by scoring them
   - MEMM, CRF
-<img width="598" alt="screen shot 2017-12-31 at 2 22 25 pm" src="https://user-images.githubusercontent.com/5177427/34464492-11dd0ed6-ee36-11e7-9709-4abecdda3457.png">
+  - <img width="598" alt="screen shot 2017-12-31 at 2 22 25 pm" src="https://user-images.githubusercontent.com/5177427/34464492-11dd0ed6-ee36-11e7-9709-4abecdda3457.png">
 
 * Classification
   - Training: Minimize loss function (Total sum square error, cross entropy- soft_max)
@@ -53,10 +57,9 @@ comments: true
   - Training: minimize the loss function
   - DL = feature discovery + classification
   - classifiy POS tag + discover required features
-<img width="644" alt="screen shot 2017-12-31 at 2 23 29 pm" src="https://user-images.githubusercontent.com/5177427/34464501-3b24c5ae-ee36-11e7-8418-95bd5182e76a.png">
-
+  - <img width="644" alt="screen shot 2017-12-31 at 2 23 29 pm" src="https://user-images.githubusercontent.com/5177427/34464501-3b24c5ae-ee36-11e7-8418-95bd5182e76a.png">
 * Deep Learning II - sequence to sequence
-<img width="631" alt="screen shot 2017-12-31 at 2 30 43 pm" src="https://user-images.githubusercontent.com/5177427/34464520-483e786a-ee37-11e7-8b53-5d5e1fbb3a5f.png">
+  - <img width="631" alt="screen shot 2017-12-31 at 2 30 43 pm" src="https://user-images.githubusercontent.com/5177427/34464520-483e786a-ee37-11e7-8b53-5d5e1fbb3a5f.png">
  
   - An RNN encoder (words -> hidden states) + a RNN decoder (hidden states -> tags)
   - get a richer representations from the sentences
@@ -75,4 +78,15 @@ comments: true
 * Complexity:
   - POS, HMM: linear
   - MT, Bear search: exponential
+
+
+
+<!--
+<img width="271" alt="screen shot 2017-12-31 at 2 13 29 pm" src="https://user-images.githubusercontent.com/5177427/34464460-ccc979de-ee34-11e7-8e72-89e7bf4a5212.png">
+* Jelinek
+-->
+
+
+
+
 
