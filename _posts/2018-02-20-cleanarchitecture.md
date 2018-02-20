@@ -6,7 +6,7 @@ description: "Clean Architecture"
 tags: [book, design pattern, architecture, software]
 comments: true
 ---
-Notes from Robert C. Martin - Clean Architecture: A Craftsman's Guide to Software Structure and Design. 
+Notes on Robert C. Martin - Clean Architecture: A Craftsman's Guide to Software Structure and Design, chapter 1-3.
 
 > The goal of software architecture is to minimize the human resources required to build and maintain the required system.
 
