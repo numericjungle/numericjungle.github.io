@@ -12,15 +12,14 @@ comments: true
 <img width="594" alt="screen shot 2017-12-31 at 1 08 44 pm" src="https://user-images.githubusercontent.com/5177427/34464212-c6212f54-ee2b-11e7-89af-4abc9818708a.png">
 -->
 
+<img width="336" alt="screen shot 2017-12-31 at 12 57 24 pm" src="https://user-images.githubusercontent.com/5177427/34464178-3ed0dc12-ee2a-11e7-8a9f-95fa73302487.png">
 * NLP= Ambiguity Processing
   - Lexical Ambiguity: dog (noun vs verb), (animal vs detesable person), contexts. 
   - Structural Ambiguity
   - Semantic Ambiguity
   - Pragmatic Ambiguity
 
-<img width="336" alt="screen shot 2017-12-31 at 12 57 24 pm" src="https://user-images.githubusercontent.com/5177427/34464178-3ed0dc12-ee2a-11e7-8a9f-95fa73302487.png">
 <!--excrept-->
-<img width="389" alt="screen shot 2017-12-31 at 12 57 32 pm" src="https://user-images.githubusercontent.com/5177427/34464177-3e247a76-ee2a-11e7-93cc-3c5a3762727a.png">
 
 
 * Main methodology
@@ -43,6 +42,8 @@ comments: true
   - Given the observation sequence, find the possible state sequences- Viterbi
   - Given the observation sequence, find its probability- forward/backward algorithm
   - Given the observation sequence find the HMM prameters.- Baum-Welch algorithm
+
+<!--excerpt-->
 * Discriminative
   - Training: Maximize entropy of probability distribution subject to the constraints from data
   - Testing: discriminate amongst hypotheses by scoring them
@@ -78,6 +79,8 @@ comments: true
 * Complexity:
   - POS, HMM: linear
   - MT, Bear search: exponential
+
+<img width="389" alt="screen shot 2017-12-31 at 12 57 32 pm" src="https://user-images.githubusercontent.com/5177427/34464177-3e247a76-ee2a-11e7-93cc-3c5a3762727a.png">
 
 
 

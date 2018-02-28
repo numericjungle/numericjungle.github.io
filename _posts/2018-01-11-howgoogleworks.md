@@ -20,7 +20,8 @@ comments: true
   - A committee vote to decide who to hire - mimic from the academic
   - A false negative is better than a false positive.
   - Huge Bonus for people do great works
- 
+
+<!--excerpt--> 
 * Don't do evil
   - When they found Google was attacked by Chinese hackers, and many dissidents' Gmail accounts were almost being hacked; after careful investigations, a committee decided to move their business out from China in order to keep servers safe.
 

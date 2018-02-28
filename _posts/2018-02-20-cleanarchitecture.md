@@ -17,6 +17,8 @@ Two perspectives of software:
 
 
 * Software architects are more focused on the structure of the system than on its features and functions”
+
+<!--excerpt-->
 * Architects create an architecture that allows those features and functions to be easily developed, modified and extended.
 * If architecture comes last, then the system will become ever more costly to develop, and eventually change will become practically impossible for part or all of the system.
 

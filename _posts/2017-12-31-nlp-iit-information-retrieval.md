@@ -13,6 +13,8 @@ comments: true
   - Token normalization finds more documents Increases recall but decreases precision
 * Stemming or lemmatization refers to stripping the word to its root or lemma:
   - e.g. “system”, “systems”, “systematic” Requires morphological analysis and is language specific
+  
+<!--excerpt-->
 * Inverse document frequency: 
   tf-idf(t,d) = tf(t, d) * idf(t)
   - High when t appears in a small number of documents

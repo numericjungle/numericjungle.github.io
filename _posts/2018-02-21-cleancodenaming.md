@@ -23,6 +23,8 @@ Notes on Clean Code - A Handbook of Agile Software Craftsmanship
   `getActiveAccounts()`
   `getActiveAccountInfo()`
 * Pronunceable names
+
+<!--excerpt-->
 * Searchable names
 * Avoid encodings
   - Hungarian notation 
