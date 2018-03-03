@@ -10,4 +10,4 @@ comments: true
 
 > Stories of love, loss and redemption
 
-Started listening to WBUR/ NPR's [Modern Love](https://www.nytimes.com/column/modern-love) podcast when I was in NYC, it becomes one of my favorite podcast. Often cry when hearing love, pain, struggles, death, youth stories (while driving and cooking). Well done - authors, the host Meghna Chakrabarti and the New York Times!
+Started listening to WBUR/ NPR's [Modern Love](https://www.nytimes.com/column/modern-love) podcasts when I was in NYC, it becomes one of my favorite podcast. Often cry when hearing love, pain, struggles, death, youth stories (while driving and cooking). Well done - authors, host Meghna Chakrabarti and the New York Times!
