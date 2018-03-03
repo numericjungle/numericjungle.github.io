@@ -3,7 +3,7 @@ date: 2018-02-27 23:13:02.910023
 layout: post
 title: Tuesdays With Morrie
 description: "Tuesdays with Morrie"
-tags: [book, spirtual]
+tags: [book, spiritual]
 comments: true
 ---
 
