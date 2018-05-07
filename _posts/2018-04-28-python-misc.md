@@ -9,17 +9,21 @@ comments: true
 
 * Multithreading
   {% highlight python %}
+   def foo(dummy, results):
+      results.append(dummy)
+
    from threading import Thread
-   foo = lambda x: x
-   threads = []
-   for x in range(3):
-       process = Thread(target=foo, args=(x))
+   num_threads = 5
+   threads, results = [], []
+   for i in range(num_threads):
+       process = Thread(target=foo, args=(i, results,))
        process.start()
        threads.append(process)
-
    for process in threads:
       process.join()
+   print(results)
    {% endhighlight %}
+<!--excerpt-->
 * Subprocess:
   {% highlight python %}
   import subprocess
@@ -46,7 +50,19 @@ comments: true
                        stderr=subprocess.PIPE,
                        creationflags=subprocess_flags).commussnicate()[1]
     {% endhighlight %}
-
+* Read & write csv without pandas:
+  {% highlight python %}
+  import csv
+  with open('fin.csv', 'r') as fin:
+    with open('fout.csv', 'w') as fout:
+        reader = csv.reader(fin)
+        writer = csv.writer(fout, lineterminator='\n')
+        res = []
+        for row in reader:
+          row.append('dummy')
+          res.append(row)
+     writer.writerows(res)
+  {% endhighlight %}
 * ipynb - Auto reload packages
   {% highlight python %}
     %load_ext autoreload
