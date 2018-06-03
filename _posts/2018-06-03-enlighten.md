@@ -3,7 +3,7 @@ date: 2018-06-03 02:19:55.128229
 layout: post
 title: Enlighten - a syntax highlighting tool
 description: "enlighten"
-tags: [chrome extension, code]
+tags: [chrome extension, code, software]
 comments: true
 ---
 
