@@ -7,4 +7,4 @@ tags: [chrome extension, code, software]
 comments: true
 ---
 
-My weekend chrome extension project: Enlighten - a handy syntax hightlighting tool based on [hightlight.js](https://highlightjs.org/), try it on [Chrome Web Store (pending review)]() or check out the [source code](https://github.com/seanschang/Enlighten). Any feedback will be appreciated!
+My weekend chrome extension project: Enlighten - a handy syntax hightlighting tool based on [hightlight.js](https://highlightjs.org/), try it on [Chrome Web Store](https://chrome.google.com/webstore/detail/enlighten/hlpllmligngglomjigiabgocblodhmof) or check out the [source code](https://github.com/seanschang/Enlighten). Any feedback will be appreciated!
