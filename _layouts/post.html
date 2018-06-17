@@ -8,7 +8,7 @@ layout: default
     <p class="post-date" itemprop="datePublished" content="{{ page.date | date: "%Y-%m-%d" }}">{{ page.date | date_to_string }}</p>
     {{ content }}
     {% if page.comments %}
-      <div class="fb-comments" data-href="http://numericjungle.github.io/" data-numposts="5"></div>
+      <div class="fb-comments" data-href="{{ site.url }}{{ page.url }}" data-numposts="5"></div>
     {% endif %}
   
   </div>
