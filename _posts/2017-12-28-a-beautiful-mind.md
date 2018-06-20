@@ -3,7 +3,7 @@ date: 2017-12-28 20:27:12.071625
 layout: post
 title: A Beautiful Mind
 description: "a beautiful mind"
-tags: [biography, math, John Nash]
+tags: [biography]
 comments: true
 ---
 
