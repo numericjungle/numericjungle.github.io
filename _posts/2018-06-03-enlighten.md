@@ -9,4 +9,6 @@ comments: true
 
 My weekend chrome extension project: Enlighten - a handy syntax hightlighting tool based on [hightlight.js](https://highlightjs.org/), try it on [Chrome Web Store](https://chrome.google.com/webstore/detail/enlighten/hlpllmligngglomjigiabgocblodhmof) or check out the [source code](https://github.com/seanschang/Enlighten). Any feedback will be appreciated!
 
-![demo](https://user-images.githubusercontent.com/5177427/41551190-2729f3ec-72f9-11e8-952d-b336d0fed0a4.png)
+![screen shot 2018-06-18 at 3 56 02 pm pngresized](https://user-images.githubusercontent.com/5177427/41670121-67a99344-7481-11e8-80e7-6a687c0013c6.jpg)
+![screen shot 2018-06-18 at 3 57 44 pm pngresized](https://user-images.githubusercontent.com/5177427/41670122-67c048b4-7481-11e8-92ff-6961f14c6b75.jpg)
+![screen shot 2018-06-18 at 3 58 00 pm pngresized](https://user-images.githubusercontent.com/5177427/41670123-67d1909c-7481-11e8-9451-03c69a128e0f.jpg)
