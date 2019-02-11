@@ -5,3 +5,6 @@ Gemfile.lock
 _site
 _drafts
 _templates
+_posts/argparse
+_posts/datetime
+_posts/new_draft.py
