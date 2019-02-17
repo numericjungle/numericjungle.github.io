@@ -10,6 +10,7 @@ While Linux is a great operating system, many applications are not available in 
 
 * Download [Mac OS 10.13](https://drive.google.com/open?id=1Tu9QHFU0_msOY44YMq4WrKblSfKXbPcn)
 * Download and install [VirtualBox](https://www.virtualbox.org/wiki/VirtualBox). 
+* Download and install [VirtualBox 6.0.4 Oracle VM VirtualBox Extension Pack](https://www.virtualbox.org/wiki/Downloads) (optional, for usb pass through)
 * Follow these steps:
 ![screenshot from 2019-02-16 21-28-52](https://user-images.githubusercontent.com/5177427/52908824-30345380-3232-11e9-8618-13de4163a694.png)
 <!--excerpt-->
@@ -19,10 +20,16 @@ Now go to Setting to set up internet by clicking "settings":
 ![screenshot from 2019-02-17 00-49-37](https://user-images.githubusercontent.com/5177427/52910554-f1ac9200-324d-11e9-92cf-6cf7b4ae7ddc.png)
 For example, "eno1" is my ethernet. wifi option is available too.
 ![screenshot from 2019-02-16 15-35-53](https://user-images.githubusercontent.com/5177427/52907006-17657700-320d-11e9-8dcc-77de30540ddf.png)
+Share clipboards:
+![screenshot from 2019-02-17 11-14-58](https://user-images.githubusercontent.com/5177427/52917993-7b884980-32a6-11e9-8fec-4c0f9733edb4.png)
+Adjust memory:
 ![screenshot from 2019-02-16 15-36-09](https://user-images.githubusercontent.com/5177427/52907007-17fe0d80-320d-11e9-861e-e9df4303f8b1.png)
-Connect the CD player by adding new:
+CD player pass through:
 ![screenshot from 2019-02-16 15-38-15](https://user-images.githubusercontent.com/5177427/52907008-17fe0d80-320d-11e9-8fae-54d17e1e827d.png)
-![screenshot from 2019-02-16 15-38-19](https://user-images.githubusercontent.com/5177427/52907009-17fe0d80-320d-11e9-8901-53fc3cd3f225.png)
+![screenshot from 2019-02-17 11-32-21](https://user-images.githubusercontent.com/5177427/52918084-e0906f00-32a7-11e9-983d-01e008f13d0f.png)
+Usb pass through (extension pack needed):
+![screenshot from 2019-02-17 11-32-47](https://user-images.githubusercontent.com/5177427/52918087-e4bc8c80-32a7-11e9-84b2-3568e5550077.png)
+
 * Before launch the virutalbox, one needs to run these commands under the VM machine folder (change $VMname to yours)
 {% highlight shell %}
 VMname='Mac OS'
