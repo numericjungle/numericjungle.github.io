@@ -3,7 +3,7 @@ date: 2017-12-31 15:04:56.824688
 layout: post
 title: NLP IIT POS tagging
 description: "NLP IIT POS tagging"
-tags: [NLP, machine learning, POS tagging, deep learning]
+tags: [NLP, machine learning]
 comments: true
 ---
 ### NLP POS-tagging (lecture by [Pushpak Bhattacharyya](https://nlpsummerschool2017.wordpress.com/schedule/))
