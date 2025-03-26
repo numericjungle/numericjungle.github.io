@@ -2,12 +2,21 @@ name: Numeric Jungle
 url: 'https://numericjungle.github.io'
 description: ""
 
-exclude: [Gemfile, Gemfile.lock, README.md]
+exclude:
+  - vendor
+  - Gemfile
+  - Gemfile.lock
+  - README.md
+
 markdown: kramdown
 
-author: 'Sean Chang'
+kramdown:
+  input: GFM
+  hard_wrap: false
 
-gems:
+author: 'Sean C'
+
+plugins:
   - jekyll-gist
   - jekyll-sitemap
 

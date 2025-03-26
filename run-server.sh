@@ -1,4 +1,5 @@
 #!/bin/bash
+bundle config set --local path 'vendor/bundle'
 bundle install
 bundle exec jekyll build
 # add --drafts to generate drafts
@@ -8,3 +9,5 @@ else
     bundle exec jekyll serve
 fi
 
+echo 'eval "$(rbenv init -)"' >> ~/.bash_profile
+source ~/.bash_profile
