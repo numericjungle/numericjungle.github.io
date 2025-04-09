@@ -1,0 +1,62 @@
+<!-- _includes/mathjax.html -->
+<!-- Include this in your default layout before the closing </body> tag -->
+
+<script>
+    // For Jekyll sites - fixes escaped delimiters after Markdown processing
+    document.addEventListener('DOMContentLoaded', function() {
+      // Create regex patterns for finding escaped delimiters
+      const patterns = [
+        // Match escaped block math delimiters: \\[ ... \\]
+        {
+          find: /\\{2,}\[\s*([\s\S]*?)\s*\\{2,}\]/g,
+          replace: function(match, p1) {
+            return '\\[' + p1 + '\\]';
+          }
+        },
+        // Match escaped inline math delimiters: \\( ... \\)
+        {
+          find: /\\{2,}\(\s*([\s\S]*?)\s*\\{2,}\)/g,
+          replace: function(match, p1) {
+            return '\\(' + p1 + '\\)';
+          }
+        },
+        // Match escaped block math with HTML entities: &bsol;[ ... &bsol;]
+        {
+          find: /&bsol;\[\s*([\s\S]*?)\s*&bsol;\]/g,
+          replace: function(match, p1) {
+            return '\\[' + p1 + '\\]';
+          }
+        },
+        // Match escaped inline math with HTML entities: &bsol;( ... &bsol;)
+        {
+          find: /&bsol;\(\s*([\s\S]*?)\s*&bsol;\)/g,
+          replace: function(match, p1) {
+            return '\\(' + p1 + '\\)';
+          }
+        }
+      ];
+      
+      // Get all elements that might contain math
+      const elements = document.querySelectorAll('p, li, div, h1, h2, h3, h4, h5, h6');
+      
+      // Process each element to fix math delimiters
+      elements.forEach(function(element) {
+        let html = element.innerHTML;
+        
+        // Apply each pattern replacement
+        patterns.forEach(function(pattern) {
+          html = html.replace(pattern.find, pattern.replace);
+        });
+        
+        // Update the element content if changes were made
+        if (html !== element.innerHTML) {
+          element.innerHTML = html;
+        }
+      });
+      
+      // Force MathJax to reprocess the page with fixed delimiters
+      if (typeof MathJax !== 'undefined' && MathJax.typesetPromise) {
+        MathJax.typesetPromise();
+      }
+    });
+  </script>

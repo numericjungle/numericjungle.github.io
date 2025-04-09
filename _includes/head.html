@@ -41,21 +41,23 @@
   <link rel="apple-touch-icon" sizes="72x72"   href="touch-icon-ipad-precomposed.png">
   <link rel="apple-touch-icon" sizes="114x114" href="touch-icon-iphone-retina-precomposed.png">
   <link rel="apple-touch-icon" sizes="144x144" href="touch-icon-ipad-retina-precomposed.png"> -->
-  <!-- MathJax Configuration -->
+
+<!-- Add this to your _includes/head.html or _layouts/default.html -->
+
+<!-- First, include MathJax with the right configuration -->
+<!-- MathJax Configuration -->
 <script>
-  MathJax = {
+  window.MathJax = {
     tex: {
-      inlineMath: [ ['$', '$']],
-      displayMath: [ ['$$', '$$']],
-      processEscapes: true,
-      processEnvironments: true
+      inlineMath: [['$', '$'], ['\\(', '\\)']],
+      displayMath: [['$$', '$$'], ['\\[', '\\]']],
+      processEscapes: true
     },
-    ignoreHtmlClass: ''
+    svg: {
+      fontCache: 'global'
+    }
   };
 </script>
-<script src="https://cdnjs.cloudflare.com/polyfill/v3/polyfill.min.js?features=es6"></script>
-<script type="text/javascript" id="MathJax-script" async
-  src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js">
-</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js" id="MathJax-script" async></script>
 </head>
 
