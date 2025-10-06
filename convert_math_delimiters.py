@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""
+r"""
 Jekyll Math Delimiter Converter
 
 This script converts LaTeX delimiters in Markdown files:
@@ -17,6 +17,78 @@ import re
 import shutil
 from pathlib import Path
 
+
+def convert_square_bracket_blocks(content):
+    """Convert bracket-wrapped display math into $$ blocks."""
+    pattern = re.compile(r'\n[ \t]*\[\n(.*?)[ \t]*\n[ \t]*\]\n', re.DOTALL)
+    changes = 0
+
+    def _replace(match):
+        nonlocal changes
+        inner = match.group(1)
+        if '\\' not in inner:
+            return match.group(0)
+        changes += 1
+        stripped = inner.strip('\n')
+        return '\n$$\n' + stripped + '\n$$\n'
+
+    return pattern.sub(_replace, content), changes
+
+
+def convert_inline_parentheses(content):
+    """Wrap inline math like (\\mathcal{L}) with $...$ while keeping parentheses."""
+    length = len(content)
+    result = []
+    changes = 0
+    i = 0
+    in_inline = False
+    in_display = False
+
+    while i < length:
+        char = content[i]
+
+        if char == '$' and (i == 0 or content[i - 1] != '\\'):
+            if i + 1 < length and content[i + 1] == '$':
+                in_display = not in_display
+                result.append('$$')
+                i += 2
+                continue
+            else:
+                in_inline = not in_inline
+                result.append('$')
+                i += 1
+                continue
+
+        if char == '(' and not in_inline and not in_display:
+            prev = content[i - 1] if i > 0 else '\n'
+            if not (prev.isalnum() or prev in {'_', '$'}):
+                depth = 1
+                k = i + 1
+                contains_newline = False
+
+                while k < length and depth > 0:
+                    current = content[k]
+                    if current == '\n':
+                        contains_newline = True
+                    if current == '(':
+                        depth += 1
+                    elif current == ')':
+                        depth -= 1
+                    k += 1
+
+                if depth == 0 and not contains_newline:
+                    inner = content[i + 1:k - 1].strip()
+                    if '$' not in inner and any(sym in inner for sym in ('\\', '_', '^')):
+                        result.append('($' + inner + '$)')
+                        i = k
+                        changes += 1
+                        continue
+
+        result.append(char)
+        i += 1
+
+    return ''.join(result), changes
+
 def convert_file(file_path, backup_dir):
     """Convert math delimiters in a single file and backup to specified dir"""
     if not file_path.suffix.lower() in ['.md', '.markdown']:
@@ -27,7 +99,11 @@ def convert_file(file_path, backup_dir):
     
     original = content
     changes = 0
-    
+
+    # Convert bracket-based display math
+    content, bracket_changes = convert_square_bracket_blocks(content)
+    changes += bracket_changes
+
     # Convert \[ ... \] to $$ ... $$
     # Using a regex pattern that handles newlines and spaces
     pattern = re.compile(r'\\\[([\s\S]*?)\\\]')
@@ -38,7 +114,11 @@ def convert_file(file_path, backup_dir):
     pattern = re.compile(r'\\\(([\s\S]*?)\\\)')
     content, count2 = pattern.subn(r'$\1$', content)
     changes += count2
-    
+
+    # Convert inline parentheses-based math
+    content, inline_changes = convert_inline_parentheses(content)
+    changes += inline_changes
+
     # Only write the file if changes were made
     if content != original:
         print(f"Converting {file_path} ({changes} changes)")

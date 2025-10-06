@@ -12,7 +12,9 @@ markdown: kramdown
 kramdown:
   math_engine: mathjax
   syntax_highlighter: rouge
-  input: GFM
+  input: kramdown
+  options:
+    parse_block_html: true
 
 author: 'Sean C'
 
@@ -25,5 +27,4 @@ sass:
     style: :compressed
 
 excerpt_separator: "<!--excerpt-->"
-
 
