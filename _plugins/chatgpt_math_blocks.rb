@@ -10,7 +10,8 @@ module NumericJungle
 
     def self.convert(content)
       content = convert_blocks(content)
-      convert_inline_parentheses(content)
+      content = convert_inline_parentheses(content)
+      content
     end
 
     def self.convert_blocks(content)
@@ -141,23 +142,28 @@ module NumericJungle
     end
 
     def self.sanitize_math_tokens(text, inline: false)
+      return '' if text.nil?
       sanitized = text.dup
       sanitized = sanitized.gsub('|', '&#124;') if inline && sanitized.include?('|')
-      if sanitized.include?('*{')
-        sanitized = sanitized.gsub('*{', '_{')
-      end
+      sanitized = sanitized.gsub('*{', '_{') if sanitized.include?('*{')
       if sanitized.include?('*')
         sanitized = sanitized.gsub(/(?<=\}|[[:alnum:]])\*([[:alnum:]])/, '_\1')
         sanitized = sanitized.gsub(/(?<=\}|[[:alnum:]])\*(\\[A-Za-z]+)/) do
           "_{#{Regexp.last_match(1)}}"
         end
       end
-      if sanitized.include?('<')
-        sanitized = sanitized.gsub(/(?<!\\)</, '\\lt ')
-      end
-      if sanitized.include?('>')
-        sanitized = sanitized.gsub(/(?<!\\)>/, '\\gt ')
-      end
+      sanitized = sanitized.gsub('!=!', '=') if sanitized.include?('!=!')
+      sanitized = sanitized.gsub('!+!', '+') if sanitized.include?('!+!')
+      sanitized = sanitized.gsub('!-!', '-') if sanitized.include?('!-!')
+      sanitized = sanitized.gsub('!\mid!', '\mid') if sanitized.include?('!\mid!')
+      sanitized = sanitized.gsub('!\mid', '\mid') if sanitized.include?('!\mid')
+      sanitized = sanitized.gsub('\mid!', '\mid') if sanitized.include?('\mid!')
+      sanitized = sanitized.gsub(/\\mid(?=[[:alnum:]_\\])/, '\\mid ') if sanitized.include?('\mid')
+      sanitized = sanitized.gsub(/!(\\[A-Za-z]+)/, '\1') if sanitized.include?('!\\')
+      sanitized = sanitized.gsub('!(', '(') if sanitized.include?('!(')
+      sanitized = sanitized.gsub('!)', ')') if sanitized.include?('!)')
+      sanitized = sanitized.gsub(/(?<!\\)</, '\\lt ') if sanitized.include?('<')
+      sanitized = sanitized.gsub(/(?<!\\)>/, '\\gt ') if sanitized.include?('>')
       sanitized
     end
 
@@ -177,6 +183,10 @@ end
 %i[documents pages posts].each do |entity|
   Jekyll::Hooks.register entity, :pre_render do |doc|
     next unless doc.is_a?(Jekyll::Document) || doc.is_a?(Jekyll::Page)
+    data = doc.respond_to?(:data) ? doc.data : {}
+    next if data && (data['skip_math_sanitize'] || data['skip_math_conversion'])
+    ext = doc.respond_to?(:extname) ? doc.extname : File.extname(doc.path || '')
+    next unless ['.md', '.markdown'].include?(ext.to_s.downcase)
 
     doc.content = NumericJungle::ChatGPTMathBlocks.convert(doc.content)
   end
