@@ -4,6 +4,34 @@
 <script>
     // For Jekyll sites - fixes escaped delimiters after Markdown processing
     document.addEventListener('DOMContentLoaded', function() {
+      function looksLikeMath(text) {
+        return /\\/.test(text) || /[_^=]/.test(text);
+      }
+
+      function convertChatGPTBlocks(html) {
+        return html.replace(/\[\s*([\s\S]*?)\s*\]/g, function(match, inner, offset, full) {
+          const hasMultiline = match.includes('\n') || /<br\s*\/?\s*>/i.test(match);
+          if (!hasMultiline) {
+            return match;
+          }
+
+          const prevChar = offset === 0 ? '\n' : full[offset - 1];
+          const nextChar = full[offset + match.length] || '\n';
+          if (prevChar && !/\n|\r|>|\s/.test(prevChar)) {
+            return match;
+          }
+          if (nextChar && !/\n|\r|<|\s/.test(nextChar)) {
+            return match;
+          }
+
+          let cleaned = inner.replace(/<br\s*\/?\s*>/gi, '\n').trim();
+          if (!cleaned || !looksLikeMath(cleaned)) {
+            return match;
+          }
+
+          return `\n\\[\n${cleaned}\n\\]\n`;
+        });
+      }
       // Create regex patterns for finding escaped delimiters
       const patterns = [
         // Match escaped block math delimiters: \\[ ... \\]
@@ -47,6 +75,8 @@
         patterns.forEach(function(pattern) {
           html = html.replace(pattern.find, pattern.replace);
         });
+
+        html = convertChatGPTBlocks(html);
         
         // Update the element content if changes were made
         if (html !== element.innerHTML) {
@@ -54,9 +84,24 @@
         }
       });
       
-      // Force MathJax to reprocess the page with fixed delimiters
-      if (typeof MathJax !== 'undefined' && MathJax.typesetPromise) {
-        MathJax.typesetPromise();
+      function requestTypeset() {
+        if (typeof MathJax !== 'undefined' && MathJax.typesetPromise) {
+          if (typeof MathJax.typesetClear === 'function') {
+            MathJax.typesetClear();
+          }
+          MathJax.typesetPromise();
+        } else {
+          window.addEventListener('load', function handleLoad() {
+            if (typeof MathJax !== 'undefined' && MathJax.typesetPromise) {
+              if (typeof MathJax.typesetClear === 'function') {
+                MathJax.typesetClear();
+              }
+              MathJax.typesetPromise();
+            }
+          }, { once: true });
+        }
       }
+
+      requestTypeset();
     });
   </script>

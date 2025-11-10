@@ -1,0 +1,253 @@
+---
+layout: page
+title: GPT Math Markdown Converter
+description: "Turn ChatGPT's LaTeX-heavy answers into Markdown with image-based formulas."
+permalink: /tools/gpt-math-converter/
+---
+
+<p class="math-converter__intro">
+  Paste any ChatGPT / LLM answer that still contains LaTeX delimiters. This tool replaces each math fragment with an
+  image URL (Codecogs by default) so it renders correctly inside Markdown posts without extra MathJax plumbing. It
+  understands inline <code>\( ... \)</code>, block <code>$$ ... $$</code>, escaped brackets <code>\[ ... \]</code>, and
+  ChatGPT's square-bracket blocks:
+</p>
+
+<div class="math-converter">
+  <label class="math-converter__label" for="renderer-base">Renderer base URL</label>
+  <input id="renderer-base" class="math-converter__renderer" value="https://latex.codecogs.com/svg.latex?" type="text">
+  <small>Use any service that returns an image for a LaTeX query string.</small>
+
+  <div class="math-converter__grid">
+    <label class="math-converter__label" for="converter-source">Source Markdown</label>
+    <label class="math-converter__label" for="converter-output">Converted Markdown</label>
+    <textarea id="converter-source" class="math-converter__textarea" placeholder="Paste ChatGPT markdown here..."></textarea>
+    <textarea id="converter-output" class="math-converter__textarea math-converter__textarea--output" readonly placeholder="Click convert to see the result"></textarea>
+  </div>
+
+  <div class="math-converter__actions">
+    <button id="convert-btn" type="button">Convert formulas</button>
+    <button id="copy-btn" type="button" disabled>Copy output</button>
+    <span id="converter-status" class="math-converter__status" aria-live="polite"></span>
+  </div>
+</div>
+
+<style>
+  .math-converter {
+    margin: 1.5rem 0 3rem;
+    padding: 1.5rem;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    background: #fafafa;
+  }
+  .math-converter__intro {
+    font-size: 0.95rem;
+  }
+  .math-converter__grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: auto 1fr;
+    gap: 0.5rem 1rem;
+    margin: 1rem 0;
+  }
+  .math-converter__label {
+    font-weight: 600;
+    font-size: 0.9rem;
+  }
+  .math-converter__textarea {
+    min-height: 320px;
+    font-family: Menlo, Consolas, Monaco, "Courier New", monospace;
+    font-size: 0.9rem;
+    padding: 0.75rem;
+    border-radius: 6px;
+    border: 1px solid #d0d0d0;
+    resize: vertical;
+  }
+  .math-converter__textarea--output {
+    background: #f2f2f2;
+  }
+  .math-converter__actions {
+    display: flex;
+    gap: 0.75rem;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  .math-converter__renderer {
+    width: 100%;
+    padding: 0.5rem 0.75rem;
+    border-radius: 6px;
+    border: 1px solid #d0d0d0;
+    margin-bottom: 0.4rem;
+    font-family: Menlo, Consolas, Monaco, "Courier New", monospace;
+  }
+  button#convert-btn,
+  button#copy-btn {
+    padding: 0.55rem 1.2rem;
+    border-radius: 4px;
+    border: none;
+    background: #444;
+    color: white;
+    cursor: pointer;
+    font-weight: 600;
+  }
+  button#copy-btn[disabled] {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+  .math-converter__status {
+    font-size: 0.9rem;
+  }
+</style>
+
+<script>
+(function() {
+  const sourceEl = document.getElementById('converter-source');
+  const outputEl = document.getElementById('converter-output');
+  const convertBtn = document.getElementById('convert-btn');
+  const copyBtn = document.getElementById('copy-btn');
+  const statusEl = document.getElementById('converter-status');
+  const rendererEl = document.getElementById('renderer-base');
+
+  const CODE_PLACEHOLDER = /@@CODEBLOCK_(\d+)@@/g;
+
+  function encodeFormula(formula, baseUrl) {
+    const trimmed = formula.trim();
+    if (!trimmed) {
+      return { markdown: trimmed, converted: false };
+    }
+    const encoded = encodeURIComponent(trimmed);
+    const url = `${baseUrl}${encoded}`;
+    return { markdown: `![](${url})`, converted: true };
+  }
+
+  function replaceBlocks(text, regex, baseUrl, counters) {
+    return text.replace(regex, function(match, expr) {
+      const { markdown, converted } = encodeFormula(expr, baseUrl);
+      if (!converted) {
+        return match;
+      }
+      counters.blocks += 1;
+      return `\n${markdown}\n`;
+    });
+  }
+
+  function replaceInline(text, regex, baseUrl, counters) {
+    return text.replace(regex, function(match, expr) {
+      const { markdown, converted } = encodeFormula(expr, baseUrl);
+      if (!converted) {
+        return match;
+      }
+      counters.inline += 1;
+      return markdown;
+    });
+  }
+
+  function convertParenInline(text, baseUrl, counters) {
+    let i = 0;
+    const length = text.length;
+    let result = '';
+
+    while (i < length) {
+      const char = text[i];
+      if (char === '(') {
+        const prev = i === 0 ? '\n' : text[i - 1];
+        if (!/[\w$]/.test(prev)) {
+          let depth = 1;
+          let k = i + 1;
+          let containsNewline = false;
+          while (k < length && depth > 0) {
+            const current = text[k];
+            if (current === '\n') {
+              containsNewline = true;
+            } else if (current === '(') {
+              depth += 1;
+            } else if (current === ')') {
+              depth -= 1;
+            }
+            k += 1;
+          }
+          if (depth === 0 && !containsNewline) {
+            const inner = text.slice(i + 1, k - 1).trim();
+            if (/[\\_^]/.test(inner) && !inner.includes('![')) {
+              const { markdown, converted } = encodeFormula(inner, baseUrl);
+              if (converted) {
+                counters.inline += 1;
+                result += `(${markdown})`;
+                i = k;
+                continue;
+              }
+            }
+          }
+        }
+      }
+      result += char;
+      i += 1;
+    }
+    return result;
+  }
+
+  function protectCodeBlocks(text) {
+    const blocks = [];
+    const safe = text.replace(/```[\s\S]*?```/g, function(block) {
+      const token = `@@CODEBLOCK_${blocks.length}@@`;
+      blocks.push(block);
+      return token;
+    });
+    return { safe, blocks };
+  }
+
+  function restoreCodeBlocks(text, blocks) {
+    return text.replace(CODE_PLACEHOLDER, function(_, index) {
+      return blocks[Number(index)] || '';
+    });
+  }
+
+  function convertMarkdown(raw) {
+    const baseUrl = rendererEl.value.trim() || 'https://latex.codecogs.com/svg.latex?';
+    const counters = { inline: 0, blocks: 0 };
+    const { safe, blocks } = protectCodeBlocks(raw);
+    let working = safe;
+
+    working = replaceBlocks(working, /\$\$([\s\S]*?)\$\$/g, baseUrl, counters);
+    working = replaceBlocks(working, /\\\[([\s\S]*?)\\\]/g, baseUrl, counters);
+    working = working.replace(/(\n|^)\[\s*\n([\s\S]*?)\n\]\s*(?=\n|$)/g, function(match, prefix, expr) {
+      const { markdown, converted } = encodeFormula(expr, baseUrl);
+      if (!converted) {
+        return match;
+      }
+      counters.blocks += 1;
+      return `${prefix}${markdown}\n`;
+    });
+    working = replaceInline(working, /\\\((.+?)\\\)/g, baseUrl, counters);
+    working = convertParenInline(working, baseUrl, counters);
+
+    const restored = restoreCodeBlocks(working, blocks);
+    return { text: restored, counters };
+  }
+
+  convertBtn.addEventListener('click', function() {
+    const source = sourceEl.value;
+    if (!source.trim()) {
+      outputEl.value = '';
+      copyBtn.disabled = true;
+      statusEl.textContent = 'Paste something to convert.';
+      return;
+    }
+    const { text, counters } = convertMarkdown(source);
+    outputEl.value = text;
+    copyBtn.disabled = false;
+    const total = counters.blocks + counters.inline;
+    statusEl.textContent = total
+      ? `Converted ${total} formula${total === 1 ? '' : 's'} (${counters.blocks} block, ${counters.inline} inline).`
+      : 'No formulas detected — double-check your delimiters.';
+  });
+
+  copyBtn.addEventListener('click', async function() {
+    try {
+      await navigator.clipboard.writeText(outputEl.value);
+      statusEl.textContent = 'Converted markdown copied to clipboard.';
+    } catch (err) {
+      statusEl.textContent = 'Clipboard unavailable — select and copy manually.';
+    }
+  });
+})();
+</script>
