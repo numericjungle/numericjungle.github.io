@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>ConvNetJS: Deep Learning in your browser</title>
+    <link href="style.css" rel="stylesheet">
+    <link href='http://fonts.googleapis.com/css?family=Cabin' rel='stylesheet' type='text/css'>
+
+    <script>
+      (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+      (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+      m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+      })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+      ga('create', 'UA-3698471-21', 'stanford.edu');
+      ga('send', 'pageview');
+
+    </script>
+
+  </head>
+  <body>
+    <a href="https://github.com/karpathy/convnetjs"><img style="position: absolute; top: 0; right: 0; border: 0;" src="https://s3.amazonaws.com/github/ribbons/forkme_right_darkblue_121621.png" alt="Fork me on GitHub"></a>
+
+    <div id="wrap">
+
+      <div id="header">
+        <img src="logo.png" height="70px" style="float:left;">
+        <h1>ConvNetJS</h1>
+        <h2>Deep Learning in your browser</h2>
+      </div>
+      <div id="menu">
+        <a href="index.html"><div class="menuit">Intro</div></a>
+        <a href="intro.html"><div class="menuit mactive">Deep Learning Resources</div></a>
+        <a href="started.html"><div class="menuit">Getting Started</div></a>
+        <a href="docs.html"><div class="menuit">Documentation</div></a>
+      </div>
+      <div class="sec">
+
+        <h3>Brief intro to Deep Learning: Digit Classification Example</h3>
+        <p>Several large companies (Google, Facebook, Microsoft, Baidu) now use Deep Learning models for various Machine Learning tasks, most notably and successfully speech and image recognition, and slowly natural language processing. Read <a href="http://www.wired.com/wiredenterprise/2013/12/facebook-yann-lecun-qa/">more.</a></p>
+
+        <p>Lets use the special case of image classification as a working example. Deep Learning is about stacking different types of transformers (layers) on top of each other. Like when you make a sandwich. Unlike a sandwich however, each layer accepts a volume of numbers (we like to call them activations since we think of each number as a firing rate of a neuron) and transforms it into a different volume of numbers using some set of internal parameters (we like to think of those as trainable synapses).</p>
+
+        <p>In the simplest and most traditional setup, the first volume of activations represents your input and the last volume represents probabilities of the input volume being among any one of several distinct classes. During training you provide the network many examples of pairs of (input volume, class) and the network tunes its parameters ("learns") to transform inputs into correct class probabilities.</p>
+
+        <p>Here's an MNIST digits example: suppose we have an image (a 28x28 array of pixel values) that contains a 4. We create a 2D volume of size (28,28) and fill it with the pixel values. Then we pipe the input volume through the network and get output volume of 10 numbers representing the probability that the input is any one of 10 different digits:</p>
+
+        <div style="text-align:center"><img src="course2.png"></div>
+
+        <p>So we transformed the original image into probabilities (taking many intermediate forms of representation along the way (that's the gray boxes in my artistic rendering). Every box is a 3-dimensional array of numbers). But wait, it looks like the network only assigned 10 percent probability to this input being a 4, and 60 percent to it being a 9! That's fine: by design the mapping from input to output is a mathematical function that is parameterized by some numbers and we can tune these parameters to make the network slightly more likely to give class 4 a higher probability for this particular input in the future.</p>
+
+        <p>The details require a bit of calculus, but you can write down the expression for the probability of digit 4 for this particular input (this is what we wish to increase) and differentiate it to derive the expression for the gradient with respect to all of network's parameters. The gradient is the vector in the parameter space along which your function (here probability of 4) increases the most. So we forwarded our image of 4, computed the probability of answer being 4, then computed the gradient on all parameters of the network, and finally we nudge all the parameters slightly along that gradient. Some people call this procedure backpropagation (or backprop), but in the form I presented it's also just stochastic gradient descent, a vanilla method in optimization literature. </p>
+
+        <p>The amount we nudge is called the learning rate, and is perhaps the single most important number in training these networks. If it's high, the networks learn faster, but if it's too high, the networks can explode. On the other hand, if it's too low the training will take a very long time. Usually you start it higher (for example say 0.1), but not too high (!) and anneal it slowly over time a few orders of magnitude (down to 0.0001 perhaps).
+        </p>
+
+        <p>In any case, what it comes down to is that after the nudge the network will be a tiny bit more likely to predict a 4 on this image. So we just start from some random parameters, repeat this procedure for tens of thousands of different digits, and the network gradually transforms itself into a digit classifier.</p>
+
+      </div>
+
+      <div class="sec">
+      <h3>External Resources</h3>
+
+        <p>Here are some more resource recommendations, ordered from beginner to advanced:</p>
+        <ul>
+          <li><a href="http://neuralnetworksanddeeplearning.com/chap1.html">Michael Nielsen's Chapter 1</a> seems like a nice and gentle introduction to neural networks.</li>
+          <li><a href="cs231n.stanford.edu">CS231n class at Stanford</a> has both slides and lecture videos on YouTube.</li>
+          <li><a href="http://cs229.stanford.edu/">Andrew Ng's CS229</a> and the <a href="https://www.coursera.org/course/ml"> Coursera class</a> are a great resource for Machine Learning, even if they do not explicitly cover Neural Networks.</li>
+          <li><a href="http://ufldl.stanford.edu/wiki/index.php/UFLDL_Tutorial">UFLDL tutorials</a> for a set of nice Matlab exercises.</li>
+          <li>Chris Manning has a nice (but slightly more mathematically demanding and Natural Language Processing focused) <a href="http://www.socher.org/index.php/DeepLearningTutorial/DeepLearningTutorial">set of videos here</a></li>
+          <li>Hugo Larochelle's nice, but fairly <a href="http://info.usherbrooke.ca/hlarochelle/cours/ift725_A2013/contenu.html">advanced class on Machine Learning</a> (Neural Nets included). Note that the page is in French but the slides and videos are in English.</li>
+          <li><a href="http://deeplearning.net/">deepLearning.net</a> has a ton of other resources listed.</li>
+        </ul>
+        </p>
+
+      </div>
+
+      <div id="footer" class="sec">
+      </div>
+
+    </div>
+  </body>
+</html>

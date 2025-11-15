@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>ConvNetJS: Deep Learning in your browser</title>
+    <link href="style.css" rel="stylesheet">
+    <link href='http://fonts.googleapis.com/css?family=Cabin' rel='stylesheet' type='text/css'>
+
+    <script>
+      (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+      (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+      m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+      })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+      ga('create', 'UA-3698471-21', 'stanford.edu');
+      ga('send', 'pageview');
+
+    </script>
+
+    <!-- JS syntax highlighting -->
+    <script type="text/javascript" src="syntaxhighlighter_3.0.83/scripts/shCore.js"></script>
+    <script type="text/javascript" src="syntaxhighlighter_3.0.83/scripts/shBrushJScript.js"></script>
+    <link type="text/css" rel="stylesheet" href="syntaxhighlighter_3.0.83/styles/shCoreDefault.css"/>
+    <script type="text/javascript">SyntaxHighlighter.all();</script>
+    <style>
+    .syntaxhighlighter {
+      width: 100% !important;
+      margin: 1em 0 1em 0 !important;
+      position: relative !important;
+      overflow: hidden !important;
+      font-size: 14px !important; 
+    }
+    </style>
+
+  </head>
+  <body>
+    <a href="https://github.com/karpathy/convnetjs"><img style="position: absolute; top: 0; right: 0; border: 0;" src="https://s3.amazonaws.com/github/ribbons/forkme_right_darkblue_121621.png" alt="Fork me on GitHub"></a>
+
+    <div id="wrap">
+
+      <div id="header">
+        <img src="logo.png" height="70px" style="float:left;">
+        <h1>ConvNetJS</h1>
+        <h2>Deep Learning in your browser</h2>
+      </div>
+      <div id="menu">
+        <a href="index.html"><div class="menuit">Intro</div></a>
+        <a href="intro.html"><div class="menuit">Deep Learning Resources</div></a>
+        <a href="started.html"><div class="menuit">Getting Started</div></a>
+        <a href="docs.html"><div class="menuit mactive">Documentation</div></a>
+      </div>
+      
+      <div class="sec">
+        <h3>Vols</h3>
+        The entire library is based around transforming 3-dimensional volumes of numbers. These volumes are stored in the <a href="https://github.com/karpathy/convnetjs/blob/master/src/convnet_vol.js">Vol class</a>, which is at the heart of the library. The Vol class is a wrapper around:
+
+        <ul> 
+          <li>a 1-dimensional list of numbers (the activations, in field .w)</li>
+          <li>their gradients (field .dw)</li>
+          <li>and lastly contains three dimensions (fields .sx, .sy, .depth).</li>
+        </ul>
+
+         Here are some examples:
+
+<pre class="brush: js; toolbar: false;">
+// create a Vol of size 32x32x3, and filled with random numbers
+var v = new convnetjs.Vol(32, 32, 3);
+var v = new convnetjs.Vol(32, 32, 3, 0.0); // same volume but init with zeros
+var v = new convnetjs.Vol(1, 1, 3); // a 1x1x3 Vol with random numbers
+
+// you can also initialize with a specific list. E.g. create a 1x1x3 Vol:
+var v = new convnetjs.Vol([1.2, 3.5, 3.6]);
+
+// the Vol is a wrapper around two lists: .w and .dw, which both have 
+// sx * sy * depth number of elements. E.g:
+v.w[0] // contains 1.2
+v.dw[0] // contains 0, because gradients are initialized with zeros
+
+// you can also access the 3-D Vols with getters and setters
+// but these are subject to function call overhead
+var vol3d = new convnetjs.Vol(10, 10, 5);
+vol3d.set(2,0,1,5.0); // set coordinate (2,0,1) to 5.0
+vol3d.get(2,0,1) // returns 5.0
+</pre>
+
+
+      </div>
+
+      <div>
+        <h3>Net</h3>
+        <p>
+          A <a href="https://github.com/karpathy/convnetjs/blob/master/src/convnet_net.js">Net</a> is a very simple class that simply contains a list of Layers (discussed below). When an example (in form of a Vol) is passed through the Net, the Net simply iterates through all of its layers and propagates the example through each one in turn, and returns the result of the last layer. Similarly, during backpropagation the Net calls the backward() function of each layer in turn to compute the gradient.
+        </p>
+      </div>
+
+      <div class="sec">
+        <h3>Layers</h3>
+        <p>
+        As mentioned, every Network is just a linear list of layers. Your first layer must be 'input' (in which you declare sizes of your input), your last layer must be a loss layer ('softmax' or 'svm' for classification, or 'regression' for regression). Every layer takes an input Vol and produces a new output Vol, which is why I prefer to refer to them as transformers.
+        </p>
+
+        <p>
+        Before going into details of the types of available layers, lets look at an example at this point that ties these concepts together in a concrete form:
+        </p>
+
+<pre class="brush: js; toolbar: false;">
+var layer_defs = [];
+// minimal network: a simple binary SVM classifer in 2-dimensional space
+layer_defs.push({type:'input', out_sx:1, out_sy:1, out_depth:2});
+layer_defs.push({type:'svm', num_classes:2});
+
+// create a net
+var net = new convnetjs.Net();
+net.makeLayers(layer_defs);
+
+// create a 1x1x2 volume of input activations:
+var x = new convnetjs.Vol(1,1,2);
+x.w[0] = 0.5; // w is the field holding the actual data
+x.w[1] = -1.3;
+// a shortcut for the above is var x = new convnetjs.Vol([0.5, -1.3]);
+
+var scores = net.forward(x); // pass forward through network
+// scores is now a Vol() of output activations
+console.log('score for class 0 is assigned:'  + scores.w[0]);
+    </pre>
+
+        <h3>Generic Neural Network Layers</h3>
+        <p>Lets now step through the details of the Layers:</p>
+
+        <div class="l">
+          <div class="lt">Input Layer</div>
+          <div class="ld">A dummy layer that essentially declares the size of input volume and must be first layer in the network. Inputs other than real-valued numbers are currently not supported.</div>
+          <pre class="brush: js; toolbar: false;">
+          {type:'input', out_sx:1, out_sy:1, out_depth:20} // declares 20-dimensional input points
+          {type:'input', out_sx:24, out_sy:24, out_depth:3} // input is 24x24 RGB image
+          </pre>
+        </div>
+
+        <div class="l">
+          <div class="lt">Fully Connected Layer</div>
+          <div class="ld">
+            Arguably the most important layer and building block of everything interesting. Declares a layer of neurons that perform weighted addition of all inputs (activations on layer below) and pass them through a nonlinearity. ReLU is the best activation to use if you know nothing about these networks. However, you have to be careful with keeping learning rates small because ReLU units can permanently die if a large gradient pushes them off your data manifold. In pratice, you may want to chain a few of these depending on how deep you want your deep learning to be ;) A good rule of thumb is you want just a few - maybe 1-3, unless you have really large datasets, in which case you shouldn't be using ConvNetJS anyway.
+          </div>
+          <pre class="brush: js; toolbar: false;">
+          // create layer of 10 linear neurons (no activation function by default)
+          {type:'fc', num_neurons:10}
+          // create layer of 10 neurons that use sigmoid activation function
+          {type:'fc', num_neurons:10, activation:'sigmoid'} // x->1/(1+e^(-x))
+          {type:'fc', num_neurons:10, activation:'tanh'} // x->tanh(x)
+          {type:'fc', num_neurons:10, activation:'relu'} // rectified linear units: x->max(0,x)
+          // maxout units: (x,y)->max(x,y). num_neurons must be divisible by 2.
+          // maxout "consumes" multiple filters for every output. Thus, this line
+          // will actually produce only 5 outputs in this layer. (group_size is 2)
+          // by default.
+          {type:'fc', num_neurons:10, activation:'maxout'} 
+          // specify group size in maxout. num_neurons must be divisible by group_size.
+          // here, output will be 3 neurons only (3 = 12/4)
+          {type:'fc', num_neurons:12, group_size: 4, activation:'maxout'}
+          // dropout half the units (probability 0.5) in this layer during training, for regularization
+          {type:'fc', num_neurons:10, activation:'relu', drop_prob: 0.5}
+          </pre>
+        </div>
+
+        <div class="l">
+          <div class="lt">Loss layers: Classifier Layers</div>
+          Use these if you are interested in predicting a set of discrete classes for your data. In softmax, the outputs are probabilities that sum to 1. An SVM is trained to only output scores, not probabilities. SVMs also use a bit better loss function that is more robust (a hinge loss), but its best to experiment a bit.
+          <pre class="brush: js; toolbar: false;">
+          layer_defs.push({type:'softmax', num_classes:2});
+          layer_defs.push({type:'svm', num_classes:2});
+          </pre>
+          When you are training a classifier layer, your classes must be numbers that begin at 0. For a binary problem, these would be class 0 and class 1. For K classes, the classes are 0..K-1.
+        </div>
+
+        <div class="l">
+          <div class="lt">Loss layers: L2 Regression Layer</div>
+          <div class="ld">Create a regression layer which takes a list of targets (arbitrary numbers, not necessarily a single discrete class label as in softmax/svm) and backprops the L2 Loss. With this, the outputs of your neural net can be arbitrary floating point numbers. In this example we are declaring that we will be predicting 3 numbers as outputs of the net.</div>
+          <pre class="brush: js; toolbar: false;">
+          // train 3 real-valued outputs
+          layer_defs.push({type:'regression', num_neurons: 3});
+          </pre>
+          When you are training a regression layer, you must pass the trainer a list of target values.
+        </div>
+
+        <h3>Layers for Convolutional Networks</h3>
+        If you are training Convolutional Neural Networks (on images, presumably), these layers will be useful:
+        <div class="l">
+          <div class="lt">Convolution Layer</div>
+          <div class="ld">
+            This layer is almost identical to fully connected layer shown above, but neurons are connected only locally to a few neurons in the layer below (not all of them), and their parameters are shared. The layer crucially takes three parameters: sx, filters, stride. These refer to the filter size, number of filters, and the stride at which they are applied in the input volume. All the other options passed to this layer (such as 'activation', 'drop_prob', 'tensor' work identically). You can also use an optional 'pad', to automatically pad the input by some amount of pixels with zeros. By default no padding is applied. The layer performs valid convolutions, so if the input volume has size W1xH1xD1, the output layer will have size W2xH2xD2, where 
+            <pre>
+            W2 = (W1 - sx + pad*2)/stride + 1
+            H2 = (H1 - sy + pad*2)/stride + 1
+            D2 = filters
+            </pre>
+            Every filter slides spatially along all x,y positions in the input volume computing a single activation map, a sheet of activations in the output volume. Note that he extent along the "depth" direction (the 3rd direction) is always the entire input depth, while the connectivity is restricted spatially. Lets see a few examples:
+          </div>
+          <pre class="brush: js; toolbar: false;">
+          // 8 5x5 filters will be convolved with the input
+          {type:'conv', sx:5, filters:8, stride:1, activation:'relu'}
+          // 10 3x3 filters will be convolved with the input. Padding of 1 applied automatically
+          {type:'conv', sx:3, pad:1, filters:10, stride:1, activation:'relu'}
+          // 10 3x4 filters will be applied (height of filter is different here)
+          {type:'conv', sx:3, sy: 4, pad:1, filters:10, stride:1, activation:'relu'}
+          // first layer of a Krizhevsky et al (2012) net. 
+          // On input of size 227x227x3 gives volume 55x55x96
+          {type:'conv', sx:11, filters:96, stride:4, activation:'relu'}
+          </pre>
+        </div>
+
+        <div class="l">
+          <div class="lt">Pooling Layer</div>
+          <div class="ld">Performs max pooling. If size of input volume W1xH1xD1, then size of output volume is W2xH2xD2, where:
+          <pre>
+            W2 = (W1 - sx + pad*2)/stride + 1
+            H2 = (H1 - sx + pad*2)/stride + 1
+            D2 = D1
+          </pre>
+          In particular note that the output depth is equal to input depth, because the max pooling happens in every slice of the input volume (activation maps) independently. The parameters passed to pooling layer are exactly same as to the convolutional layer (but of course, without 'activation'):
+          </div>
+          <pre class="brush: js; toolbar: false;">
+          // perform max pooling in 2x2 non-overlapping neighborhoods
+          {type:'pool', sx:2, stride:2}
+          </pre>
+        </div>
+
+        <div class="l">
+          <div class="lt">Local Contrast Normalization Layer</div>
+          <div class="ld">Local contrast normalization according to <a href="https://code.google.com/p/cuda-convnet/wiki/LayerParams#Local_response_normalization_layer_(same_map)">this</a> formula, but 1 is replaced with k. It creates local competition among neurons along depth, independently at every particular location in the input volume.</div>
+          <pre class="brush: js; toolbar: false;">
+          {type:'lrn', k:1, n:3, alpha:0.1, beta:0.75}
+          </pre>
+        </div>
+      </div>
+
+      <div class="sec">
+        <h3>Trainers</h3>
+        <p>
+        So, we've seen how to define a network. Lets see how we actually train one. We will need the Trainer class. The Trainer class takes a network and parameters, and then you pass it examples and the associated correct labels (class labels, or target values in regression). The trainer passes the examples through the network, sees the network predictions, and then adjusts the network weights to make the provided correct labels more likely for that particular input in the future. If you do this many, times for your entire dataset in turns, it will over time transform the network to map all inputs to correct outputs!
+        </p>
+
+        <pre class="brush: js; toolbar: false;">
+        // example SGD+Momentum trainer. Performs a weight update every 10 examples
+        var trainer = new convnetjs.Trainer(net, {method: 'sgd', learning_rate: 0.01, 
+                                            l2_decay: 0.001, momentum: 0.9, batch_size: 10,
+                                            l1_decay: 0.001});
+        // example that uses adadelta. Reasonable for beginners.
+        var trainer = new convnetjs.Trainer(net, {method: 'adadelta', l2_decay: 0.001,
+                                            batch_size: 10});
+        // example adagrad.
+        var trainer = new convnetjs.Trainer(net, {method: 'adagrad', l2_decay: 0.001, 
+                                            l1_decay: 0.001, batch_size: 10});
+        </pre>
+
+        <p>
+        The three main options for a trainer are specified with 'method' and can be 'sgd'/'adagrad'/'adadelta'. The equations for these can be seen in this <a href="http://www.matthewzeiler.com/pubs/googleTR2012/googleTR2012.pdf">paper</a>. Also relevant, here is a <a href="demo/trainers.html">ConvNetJS demo comparing these</a> on MNIST. Here are some tips:
+        <ul>
+          <li>If you are a newbie, I'd recommend using <b>Adadelta</b> or then <b>Adagrad</b>. They automatically adapt the learning rate and do it relatively reasonably.</li>
+          <li>If you use <b>SGD</b>, you almost always want to use a non-zero momentum. 0.9 is often used for momentum. You need to play with the learning rate a bit: if it's too high, your network will never converge at best, and will die catastrophically at worst, especially if you use ReLU activations. But if it's too low, the network will take very long to train. You need to monitor the cost of the training (as explained below)</li>
+          <li>You basically always want to use a non-zero <b>l2_decay</b>. If it's too high, the network will be regularized very strongly. This might be a good idea if you have very few training data. If your training error is also very low (so your network is crushing the training set perfectly), you may want to increase this a bit to have better generalization. If your training error is very high (so the network is struggling to learn your data), you may want to try to decrease it.</li>
+          <li>Use <b>l1_decay</b> instead of l2_decay if you'd like your network to have sparse weights at the end, as l1 norm on weights is sparsity encouraging. If you have no idea what I'm talking about, don't touch l1_decay and leave it at 0 (default).</li>
+          <li>Usually you want to use <b>batch_size</b> of 1. This basically controls how accurate the gradient steps of your network will be. If you let the network see 100 examples in a batch, it will be able to estimate a much better value for gradient before it actually takes the step. However, in practice a value of 1 (and having an appropriately small learning rate) is probably the best way to go.</li>
+          <li>Q: I don't care about anything, just tell me what to use. A: okay, the 2nd example above (with 'adadelta') is probably good to try.</li>
+        </ul>      
+        </p>
+
+        <p>
+          Lets see examples of actually training:
+        </p>
+
+        <pre class="brush: js; toolbar: false;">
+        // the trainer takes Vol() inputs.
+        var x = new convnetjs.Vol(1,1,d);
+        x.w[0] = 1; // set first feature to 1. example
+
+        // if your loss on top is
+        // layer_defs.push({type:'svm', num_classes: 5});
+        // use something like... (lets say x is class 3)
+        var stats = trainer.train(x, 3);
+
+        // if your loss on top is
+        // layer_defs.push({type:'regression', num_neurons: 1});
+        // use something like... (note the LIST!)
+        var stats = trainer.train(x, [0.7]);
+        // if your loss on top is
+        // layer_defs.push({type:'regression', num_neurons: 3});
+        // use something like
+        var stats = trainer.train(x, [0.7, 0.1, 0.3]);
+        </pre>
+        <p>
+          The returned object stats contains the cost (which you want to be decrease over time as you train, that's good). It also returns other things such as the time to propagate forward and backwards. Here's a last, little more realistic example of a training loop:
+        </p>
+        
+        <pre class="brush: js; toolbar: false;">
+          var trainer = new convnetjs.SGDTrainer(net, {learning_rate:0.01, 
+                            momentum:0.9, batch_size:16, l2_decay:0.001});
+          for(var i=0;i&ltmy_data.length;i++) {
+            var x = new convnetjs.Vol(1,1,2,0.0); // a 1x1x2 volume initialized to 0's.
+            x.w[0] = my_data[i][0]; // Vol.w is just a list, it holds your data
+            x.w[1] = my_data[i][1];
+            trainer.train(x, my_labels[i]);
+          }
+        </pre>
+
+      </div>
+
+<!--
+      <div class="sec">
+        <h3>Fully-Automatic Learning with MagicNet</h3>
+        <p>
+        The MagicNet class performs fully-automatic prediction on your data. You don't have to worry about anything except providing your data and letting it train for a while. Internally, the MagicNet tries out many different types of networks, performs n-fold cross-validations of network hyper-parameters across folds of your data, and creates a final classifier ensemble by model averaging the best architectures.
+        </p>
+        <p>
+        In more detail, the MagicNet class first generates folds of the training data. Then, it samples a batch of candidate networks and trains and evaluates every one of them across the data folds. Once it has evaluated a batch of candidate networks, it will sample a new batch and evaluate those, forever. It keeps a record of the best performing networks and when you ask for a prediction, it will use the top few to do prediction on your data, and averages their predictions. Averaging is a powerful ensemble technique that almost always gives better results than a single network alone. Here's how you can set one up:
+        </p>
+
+<pre class="brush: js; toolbar: false;">
+var opts = {}; // options struct
+opts.train_ratio = 0.7; // what portion of data goes to train, in train/validation fold splits. Here, 70%
+opts.num_folds = 1; // number of folds to evaluate per candidate
+opts.num_candidates = 50; // number of candidates to evaluate in parallel
+opts.num_epochs = 20; // number of epochs to make through data per fold
+opts.ensemble_size = 20; // how many nets to average in the end for prediction? likely higher = better but slower
+
+var magicNet = new convnetjs.MagicNet(train_data, train_labels, opts);
+magicNet.onFinishBatch(finishedBatch); // example of setting callback for events
+
+// start training MagicNet. Every call trains all candidates in current batch on one example
+setInterval(function(){ magicNet.step(); }, 0});
+
+function finishedBatch() {
+  // prediction example. xout is Vol of scores
+  // there is also predict_soft(), which returns the full score volume for all labels
+  var predicted_label = magicNet.predict(some_test_vol);
+}
+</pre>
+        <p>
+          The MagicNet has a few more options that let you tweak the extent of the hyper-parameter settings that are used in sampling the candidate models. These are for now best inspected in the <a href="https://github.com/karpathy/convnetjs/blob/master/src/convnet_magicnet.js">source code</a> for the MagicNet. For example:
+        </p>
+<pre class="brush: js; toolbar: false;">
+opts.neurons_min = 100; // set min and max number of neurons sampled per layer in magic net
+opts.neurons_max = 300;
+
+opts.l2_decay_min = 0; // would cause sampled models to have L2 weight decay from 10^0... 10^4
+opts.l2_decay_max = 4; 
+</pre>
+
+      </div>
+-->
+
+      <div class="sec">
+        <h3>Saving and Loading Networks with JSON</h3>
+        <p>
+        Simply put, use the toJSON() and fromJSON() functions. For example to save and load a net:
+        </p>
+<pre class="brush: js; toolbar: false;">
+// network outputs all of its parameters into json object
+var json = net.toJSON();
+// the entire object is now simply string. You can save this somewhere
+var str = JSON.stringify(json);
+
+// later, to recreate the network:
+var json = JSON.parse(str); // creates json object out of a string
+var net2 = new convnetjs.Net(); // create an empty network
+net2.fromJSON(json); // load all parameters from JSON
+</pre>
+        <p>
+        After executing the last line, net2 should be an exact duplicate of the original net.
+        </p>
+
+      </div>
+
+      <div class="sec">
+        <h3>Utilities and Visualizations</h3>
+        <p>
+        See github repo for modules (vis and util inside build/) that do small useful things, like plot graphs and so on. See demos for examples on how to use this functionality for now.
+        </p>
+      </div>
+
+      <div class="sec">
+        <h3>Reinforcement Learning</h3>
+        <p>
+        There is a module available to do Reinforcement Learning using <a href="http://arxiv.org/abs/1312.5602">Deep Q Learning</a>. This allows you to create a deeqlearn.Brain() instance that takes states and rewards over time and produces a discrete action. Over time, the brain automagically adjusts its weights to perform actions that maximize the expected, time-discounted reward.
+        </p>
+
+        <p>
+          For example, lets train an agent that observes 3-dimensional states and is asked to do one of two actions. Lets reward the agent only for action 0 for sake of very simple example:
+
+<pre class="brush: js; toolbar: false;">
+var brain = new deepqlearn.Brain(3, 2); // 3 inputs, 2 possible outputs (0,1)
+var state = [Math.random(), Math.random(), Math.random()];
+for(var k=0;k&lt10000;k++) {
+    var action = brain.forward(state); // returns index of chosen action
+    var reward = action === 0 ? 1.0 : 0.0;
+    brain.backward([reward]); // &lt-- learning magic happens here
+    state[Math.floor(Math.random()*3)] += Math.random()*2-0.5;
+}
+brain.epsilon_test_time = 0.0; // don't make any more random choices
+brain.learning = false;
+// get an optimal action from the learned policy
+var action = brain.forward(array_with_num_inputs_numbers);
+</pre>
+
+        Of course, there are many possible options you can set. have a look at the reinfocement learning demo rldemo.html inside demo/ folder, or see the <a href="demo/rldemo.html">Reinforcement Learning demo</a> for more documentation.
+
+        </p>
+
+        <p>
+          For Reinforcement Learning you might also be interested in my other projects <a href="http://cs.stanford.edu/people/karpathy/reinforcejs/">reinforcejs</a>.
+        </p>
+      </div>
+
+      <div id="footer" class="sec">
+      </div>
+
+    </div>
+  </body>
+</html>

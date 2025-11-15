@@ -1,0 +1,122 @@
+---
+layout: page
+title: Train Deep Learning
+permalink: /train-deep-learning/
+---
+
+<p>
+  Below is a curated view of the ConvNetJS <em>Intro → Browser Demos</em> section so you can jump straight into hands-on neural-network experiments inside the browser.
+  Each tile opens the vendored local copy of the original Stanford demos in a new tab—no installs or external network dependency needed.
+</p>
+
+<div class="demo-grid">
+  <article class="demo-card">
+    <a href="/convnetjs/demo/mnist.html" target="_blank" rel="noopener">
+      <img src="/convnetjs/mnist.png" alt="Screenshot of MNIST digit classifier demo">
+      <h3>MNIST CNN</h3>
+      <p>Train a convolutional net that recognizes handwritten digits.</p>
+    </a>
+  </article>
+
+  <article class="demo-card">
+    <a href="/convnetjs/demo/cifar10.html" target="_blank" rel="noopener">
+      <img src="/convnetjs/cifar10.jpeg" alt="Screenshot of CIFAR10 classifier demo">
+      <h3>CIFAR-10 CNN</h3>
+      <p>Classify natural images from CIFAR-10 with a deeper convolutional net.</p>
+    </a>
+  </article>
+
+  <article class="demo-card">
+    <a href="/convnetjs/demo/classify2d.html" target="_blank" rel="noopener">
+      <img src="/convnetjs/classify2d.png" alt="Screenshot of interactive 2D classifier demo">
+      <h3>2-D Classifier</h3>
+      <p>Draw toy datasets and watch a small net learn decision boundaries live.</p>
+    </a>
+  </article>
+
+  <article class="demo-card">
+    <a href="/convnetjs/demo/regression.html" target="_blank" rel="noopener">
+      <img src="/convnetjs/regression.png" alt="Screenshot of 1D regression demo">
+      <h3>1-D Regression</h3>
+      <p>Interactively fit smooth curves to 1-D data using neural nets.</p>
+    </a>
+  </article>
+
+  <article class="demo-card">
+    <a href="/convnetjs/demo/autoencoder.html" target="_blank" rel="noopener">
+      <img src="/convnetjs/autoencoder.png" alt="Screenshot of autoencoder demo">
+      <h3>MNIST Autoencoder</h3>
+      <p>Compress and reconstruct digits with an autoencoder architecture.</p>
+    </a>
+  </article>
+
+  <article class="demo-card">
+    <a href="/convnetjs/demo/rldemo.html" target="_blank" rel="noopener">
+      <img src="/convnetjs/rldemo.png" alt="Screenshot of reinforcement learning demo">
+      <h3>Deep Q Learning</h3>
+      <p>Explore reinforcement learning agents using Deep Q-Networks.</p>
+    </a>
+  </article>
+
+  <article class="demo-card">
+    <a href="/convnetjs/demo/image_regression.html" target="_blank" rel="noopener">
+      <img src="/convnetjs/nncat.png" alt="Screenshot of neural network image painting demo">
+      <h3>Neural Painter</h3>
+      <p>Watch a fully-connected net “paint” an image pixel by pixel.</p>
+    </a>
+  </article>
+
+  <article class="demo-card">
+    <a href="/convnetjs/demo/trainers.html" target="_blank" rel="noopener">
+      <img src="/convnetjs/trainers.png" alt="Screenshot comparing SGD, Adagrad, and Adadelta trainers">
+      <h3>Optimizer Playground</h3>
+      <p>Compare SGD, Adagrad, and Adadelta on the same dataset in real time.</p>
+    </a>
+  </article>
+</div>
+
+<p>
+  Want to dive deeper? Browse the full <a href="/convnetjs/index.html#demos" target="_blank" rel="noopener">ConvNetJS intro page</a> or read the detailed <a href="/convnetjs/docs.html" target="_blank" rel="noopener">documentation</a>.
+</p>
+
+<style>
+.demo-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 1.5rem;
+}
+.demo-card {
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  overflow: hidden;
+  background: #fff;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  height: 100%;
+}
+.demo-card a {
+  color: inherit;
+  text-decoration: none;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+.demo-card img {
+  width: 100%;
+  height: 150px;
+  object-fit: cover;
+  border-bottom: 1px solid #eee;
+}
+.demo-card h3 {
+  margin: 0.75rem 1rem 0;
+  font-size: 1rem;
+}
+.demo-card p {
+  margin: 0.5rem 1rem 1rem;
+  color: #555;
+}
+.demo-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 6px 16px rgba(0,0,0,0.08);
+}
+</style>
