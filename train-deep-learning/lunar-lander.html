@@ -1,0 +1,483 @@
+---
+layout: page
+title: Lunar Lander Policy Gradient Lab
+permalink: /train-deep-learning/lunar-lander/
+---
+
+<p>
+  Train a tiny policy-gradient agent to pilot a minimalist lunar lander. Everything happens in the browser: the physics simulator, REINFORCE updates, and the visualization of the lander firing its thrusters toward the landing pad.
+</p>
+
+<div class="lander-grid">
+  <section class="lander-panel">
+    <header>
+      <h2>Live lander</h2>
+      <p>The canvas replays the best policy discovered so far. Once training improves, the lander will flare just before touchdown.</p>
+    </header>
+    <canvas id="landerCanvas" width="720" height="360" aria-label="Lunar lander visualization"></canvas>
+    <div class="lander-controls">
+      <button id="startLanderTraining">Start training</button>
+      <button id="pauseLanderTraining" disabled>Pause</button>
+      <button id="resetLanderTraining">Reset</button>
+    </div>
+    <div class="lander-metrics" id="landerMetrics" aria-live="polite"></div>
+  </section>
+
+  <section class="lander-panel">
+    <header>
+      <h2>Training telemetry</h2>
+      <p>Each episode computes Monte-Carlo returns and nudges the policy via REINFORCE with an exponential moving baseline.</p>
+    </header>
+    <canvas id="landerChart" width="720" height="320" aria-label="Episode return chart"></canvas>
+    <div class="lander-log" id="landerLog"></div>
+  </section>
+</div>
+
+<script>
+(function() {
+  const dt = 0.02;
+  const gravity = -1.5;
+  const mainThrustAccel = 5.0;
+  const sideThrustAccel = 2.5;
+  const torqueGain = 5.0;
+  const dampOmega = 0.2;
+  const padX = 0;
+  const padWidth = 0.3;
+  const padY = 0;
+  const landerMass = 1.0;
+  const stateDim = 6;
+  const actionDim = 2;
+  const gamma = 0.99;
+  const policyLr = 0.015;
+  const sigma = 0.35;
+
+  let weights = new Float64Array(stateDim * actionDim).fill(0);
+  let biases = new Float64Array(actionDim).fill(0);
+  let bestWeights = null;
+  let bestReturn = -Infinity;
+  let baselineReturn = 0;
+  let training = false;
+  let episodeCount = 0;
+  let chartHistory = [];
+  let vizState = resetState();
+
+  const canvas = document.getElementById('landerCanvas');
+  const ctx = canvas.getContext('2d');
+  const chartCanvas = document.getElementById('landerChart');
+  const chartCtx = chartCanvas.getContext('2d');
+  const metricsEl = document.getElementById('landerMetrics');
+  const logEl = document.getElementById('landerLog');
+  const startBtn = document.getElementById('startLanderTraining');
+  const pauseBtn = document.getElementById('pauseLanderTraining');
+  const resetBtn = document.getElementById('resetLanderTraining');
+
+  startBtn.addEventListener('click', () => {
+    if (training) return;
+    training = true;
+    startBtn.disabled = true;
+    pauseBtn.disabled = false;
+    startBtn.textContent = episodeCount === 0 ? 'Training…' : 'Resume training';
+    trainLoop();
+  });
+
+  pauseBtn.addEventListener('click', () => {
+    training = false;
+    startBtn.disabled = false;
+    pauseBtn.disabled = true;
+    startBtn.textContent = 'Resume training';
+  });
+
+  resetBtn.addEventListener('click', () => {
+    training = false;
+    weights = new Float64Array(stateDim * actionDim).fill(0);
+    biases = new Float64Array(actionDim).fill(0);
+    bestWeights = null;
+    bestReturn = -Infinity;
+    baselineReturn = 0;
+    episodeCount = 0;
+    chartHistory = [];
+    vizState = resetState();
+    startBtn.disabled = false;
+    pauseBtn.disabled = true;
+    startBtn.textContent = 'Start training';
+    updateMetrics();
+    drawChart();
+  });
+
+  function resetState() {
+    return {
+      x: (Math.random() - 0.5) * 0.8,
+      y: 1.2 + Math.random() * 0.2,
+      vx: (Math.random() - 0.5) * 0.3,
+      vy: -0.2,
+      theta: (Math.random() - 0.5) * 0.4,
+      omega: (Math.random() - 0.5) * 0.3
+    };
+  }
+
+  function encodeState(s) {
+    return [
+      s.x,
+      s.y - 0.5,
+      s.vx,
+      s.vy,
+      s.theta,
+      s.omega
+    ];
+  }
+
+  function clamp(value, min, max) {
+    return Math.max(min, Math.min(max, value));
+  }
+
+  function randn() {
+    let u = 0, v = 0;
+    while (u === 0) u = Math.random();
+    while (v === 0) v = Math.random();
+    return Math.sqrt(-2.0 * Math.log(u)) * Math.cos(2.0 * Math.PI * v);
+  }
+
+  function policyForward(stateVec, w, b) {
+    const means = new Array(actionDim).fill(0);
+    for (let i = 0; i < actionDim; i++) {
+      let sum = b[i];
+      for (let j = 0; j < stateDim; j++) {
+        sum += w[i * stateDim + j] * stateVec[j];
+      }
+      means[i] = sum;
+    }
+    return means;
+  }
+
+  function stepDynamics(state, action) {
+    const mainRaw = (action[0] + 1) * 0.5; // map [-1,1] -> [0,1]
+    const main = clamp(mainRaw, 0, 1);
+    const side = clamp(action[1], -1, 1);
+
+    const ax = (side * sideThrustAccel + Math.sin(state.theta) * main * mainThrustAccel) / landerMass;
+    const ay = gravity + (Math.cos(state.theta) * main * mainThrustAccel) / landerMass;
+    const alpha = -side * torqueGain - state.omega * dampOmega;
+
+    const vx = state.vx + ax * dt;
+    const vy = state.vy + ay * dt;
+    const x = state.x + vx * dt;
+    const y = state.y + vy * dt;
+    const omega = state.omega + alpha * dt;
+    const theta = state.theta + omega * dt;
+
+    let reward = 0;
+    reward -= (Math.abs(x - padX) * 4 + Math.abs(vx) * 1.2 + Math.abs(vy + 0.1) * 2 + Math.abs(theta) * 1.0 + Math.abs(omega) * 0.3) * dt;
+    reward -= 0.05 * main + 0.02 * Math.abs(side);
+
+    let done = false;
+    let success = false;
+    let newY = y;
+    let newVy = vy;
+    if (y <= padY) {
+      newY = padY;
+      newVy = 0;
+      done = true;
+      const softLanding = Math.abs(x - padX) < padWidth && Math.abs(vx) < 0.4 && vy > -0.6 && Math.abs(theta) < 0.25;
+      if (softLanding) {
+        reward += 120;
+        success = true;
+      } else {
+        reward -= 120;
+      }
+    }
+
+    const newState = {
+      x,
+      y: newY,
+      vx,
+      vy: newVy,
+      theta,
+      omega
+    };
+
+    return { state: newState, reward, done, success };
+  }
+
+  function runEpisode(currentWeights, currentBiases) {
+    let state = resetState();
+    const states = [];
+    const actionsRaw = [];
+    const actionsClipped = [];
+    const meansHistory = [];
+    const rewards = [];
+    let totalReward = 0;
+    let success = false;
+
+    for (let t = 0; t < 1000; t++) {
+      const stateVec = encodeState(state);
+      const means = policyForward(stateVec, currentWeights, currentBiases);
+      const actionRaw = means.map(m => m + sigma * randn());
+      const actionClipped = actionRaw.map(a => clamp(a, -1, 1));
+      const { state: nextState, reward, done, success: soft } = stepDynamics(state, actionClipped);
+
+      states.push(stateVec);
+      actionsRaw.push(actionRaw);
+      actionsClipped.push(actionClipped);
+      meansHistory.push(means);
+      rewards.push(reward);
+      totalReward += reward;
+      success = success || soft;
+      state = nextState;
+      if (done) break;
+    }
+
+    return { states, actionsRaw, actionsClipped, meansHistory, rewards, totalReward, success };
+  }
+
+  function computeReturns(rewards) {
+    const returns = new Array(rewards.length).fill(0);
+    let running = 0;
+    for (let t = rewards.length - 1; t >= 0; t--) {
+      running = rewards[t] + gamma * running;
+      returns[t] = running;
+    }
+    return returns;
+  }
+
+  function reinforceUpdate(trajectory) {
+    if (!trajectory.rewards.length) {
+      return;
+    }
+    const returns = computeReturns(trajectory.rewards);
+    baselineReturn = 0.95 * baselineReturn + 0.05 * returns[0];
+    const advantage = returns.map(r => r - baselineReturn);
+
+    const gradW = new Float64Array(stateDim * actionDim).fill(0);
+    const gradB = new Float64Array(actionDim).fill(0);
+
+    for (let t = 0; t < trajectory.rewards.length; t++) {
+      const stateVec = trajectory.states[t];
+      const means = trajectory.meansHistory[t];
+      const actionRaw = trajectory.actionsRaw[t];
+      for (let i = 0; i < actionDim; i++) {
+        const coeff = advantage[t] * (actionRaw[i] - means[i]) / (sigma * sigma);
+        for (let j = 0; j < stateDim; j++) {
+          gradW[i * stateDim + j] += coeff * stateVec[j];
+        }
+        gradB[i] += coeff;
+      }
+    }
+
+    const steps = trajectory.rewards.length;
+    for (let idx = 0; idx < gradW.length; idx++) {
+      weights[idx] += policyLr * gradW[idx] / steps;
+    }
+    for (let i = 0; i < gradB.length; i++) {
+      biases[i] += policyLr * gradB[i] / steps;
+    }
+  }
+
+  function trainLoop() {
+    if (!training) return;
+    const traj = runEpisode(weights, biases);
+    reinforceUpdate(traj);
+    episodeCount += 1;
+
+    if (traj.totalReward > bestReturn) {
+      bestReturn = traj.totalReward;
+      bestWeights = { w: Array.from(weights), b: Array.from(biases) };
+      vizState = resetState();
+    }
+
+    chartHistory.push({ episode: episodeCount, reward: traj.totalReward });
+    if (chartHistory.length > 200) chartHistory.shift();
+
+    updateMetrics(traj);
+    drawChart();
+
+    logEl.textContent = `Episode ${episodeCount}: return ${traj.totalReward.toFixed(1)} | success: ${traj.success ? 'yes' : 'no'}`;
+
+    setTimeout(trainLoop, 0);
+  }
+
+  function updateMetrics(latestTraj) {
+    const latest = latestTraj ? latestTraj.totalReward.toFixed(1) : '—';
+    metricsEl.innerHTML = `
+      <strong>Episodes:</strong> ${episodeCount}<br>
+      <strong>Best return:</strong> ${bestReturn === -Infinity ? '—' : bestReturn.toFixed(1)}<br>
+      <strong>Latest return:</strong> ${latest}
+    `;
+  }
+
+  function drawChart() {
+    const width = chartCanvas.width;
+    const height = chartCanvas.height;
+    chartCtx.clearRect(0, 0, width, height);
+
+    chartCtx.strokeStyle = '#d1d5db';
+    chartCtx.lineWidth = 1;
+    chartCtx.beginPath();
+    chartCtx.moveTo(40, 10);
+    chartCtx.lineTo(40, height - 30);
+    chartCtx.lineTo(width - 10, height - 30);
+    chartCtx.stroke();
+
+    if (!chartHistory.length) return;
+
+    const maxReward = Math.max(...chartHistory.map(pt => pt.reward));
+    const minReward = Math.min(...chartHistory.map(pt => pt.reward));
+    const yRange = Math.max(40, maxReward - minReward + 20);
+    const yMax = maxReward + 10;
+    const xSpan = Math.max(1, chartHistory.length - 1);
+
+    chartCtx.strokeStyle = '#7c3aed';
+    chartCtx.lineWidth = 2;
+    chartCtx.beginPath();
+
+    chartHistory.forEach((pt, idx) => {
+      const x = 40 + (width - 60) * (idx / xSpan);
+      const norm = (pt.reward - (yMax - yRange)) / yRange;
+      const y = (height - 30) - norm * (height - 60);
+      if (idx === 0) chartCtx.moveTo(x, y);
+      else chartCtx.lineTo(x, y);
+    });
+    chartCtx.stroke();
+
+    chartCtx.fillStyle = '#475569';
+    chartCtx.font = '12px/1.4 system-ui, -apple-system, BlinkMacSystemFont, sans-serif';
+    chartCtx.fillText(`${yMax.toFixed(0)}`, 45, 20);
+    chartCtx.fillText(`${(yMax - yRange).toFixed(0)}`, 45, height - 34);
+  }
+
+  function bestPolicyStep(state) {
+    const stateVec = encodeState(state);
+    const useWeights = bestWeights ? bestWeights.w : Array.from(weights);
+    const useBiases = bestWeights ? bestWeights.b : Array.from(biases);
+    const means = policyForward(stateVec, useWeights, useBiases);
+    const action = means.map(m => clamp(m, -1, 1));
+    return stepDynamics(state, action);
+  }
+
+  function render() {
+    const width = canvas.width;
+    const height = canvas.height;
+    ctx.clearRect(0, 0, width, height);
+
+    ctx.fillStyle = '#030712';
+    ctx.fillRect(0, 0, width, height);
+
+    const groundY = height * 0.8;
+    ctx.fillStyle = '#0f172a';
+    ctx.fillRect(0, groundY, width, height - groundY);
+
+    const padPixelX = width / 2 + padX * 200;
+    const padPixelWidth = padWidth * 400;
+    ctx.fillStyle = '#475569';
+    ctx.fillRect(padPixelX - padPixelWidth / 2, groundY - 6, padPixelWidth, 6);
+
+    const scaleX = 200;
+    const scaleY = 200;
+    const landerX = width / 2 + vizState.x * scaleX;
+    const landerY = groundY - vizState.y * scaleY;
+
+    ctx.save();
+    ctx.translate(landerX, landerY);
+    ctx.rotate(-vizState.theta);
+    ctx.fillStyle = '#cbd5f5';
+    ctx.fillRect(-20, -10, 40, 20);
+
+    if (vizState.vy < -0.2) {
+      ctx.fillStyle = '#f97316';
+      ctx.beginPath();
+      ctx.moveTo(-12, 10);
+      ctx.lineTo(0, 30 + Math.random() * 10);
+      ctx.lineTo(12, 10);
+      ctx.closePath();
+      ctx.fill();
+    }
+    ctx.restore();
+
+    ctx.fillStyle = '#e2e8f0';
+    ctx.font = '14px/1.4 system-ui, -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.fillText(`x: ${vizState.x.toFixed(2)} m`, 20, 24);
+    ctx.fillText(`y: ${vizState.y.toFixed(2)} m`, 20, 44);
+    ctx.fillText(`v_y: ${vizState.vy.toFixed(2)} m/s`, 20, 64);
+
+    const { state: nextState, done } = bestPolicyStep(vizState);
+    vizState = done ? resetState() : nextState;
+
+    requestAnimationFrame(render);
+  }
+
+  updateMetrics();
+  drawChart();
+  render();
+})();
+</script>
+
+<style>
+.lander-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+  gap: 2rem;
+  margin-top: 1.5rem;
+}
+.lander-panel {
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 1.25rem;
+  background: #fff;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.05);
+}
+.lander-panel header h2 {
+  margin-bottom: 0.25rem;
+}
+.lander-panel header p {
+  margin-top: 0;
+  color: #475569;
+}
+#landerCanvas, #landerChart {
+  width: 100%;
+  border: 1px solid #cbd5f5;
+  border-radius: 8px;
+  background: #020617;
+  margin-top: 0.75rem;
+}
+.lander-controls {
+  margin-top: 0.75rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.lander-controls button {
+  border: none;
+  border-radius: 6px;
+  padding: 0.55rem 1.2rem;
+  font-size: 0.95rem;
+  cursor: pointer;
+  color: #fff;
+  background: #2563eb;
+}
+.lander-controls button[disabled] {
+  background: #94a3b8;
+  cursor: not-allowed;
+}
+#pauseLanderTraining {
+  background: #0ea5e9;
+}
+#resetLanderTraining {
+  background: #f97316;
+}
+.lander-metrics {
+  margin-top: 0.75rem;
+  font-family: "IBM Plex Mono", SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace;
+  font-size: 0.9rem;
+  color: #0f172a;
+}
+.lander-log {
+  margin-top: 0.75rem;
+  font-family: "IBM Plex Mono", SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace;
+  font-size: 0.85rem;
+  color: #475569;
+}
+@media (max-width: 600px) {
+  .lander-controls {
+    flex-direction: column;
+  }
+}
+</style>
