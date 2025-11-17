@@ -1,0 +1,401 @@
+---
+layout: page
+title: Inverted Pendulum Trainer
+permalink: /train-deep-learning/inverted-pendulum/
+---
+
+<p>
+  This standalone trainer implements a lightweight cross-entropy method (CEM) agent that learns to balance a cart-pole from scratch using only browser-side JavaScript—no server round-trips or external dependencies. Hit <strong>Start training</strong> to watch the policy evolve and the pendulum animation stabilize as the agent improves.
+</p>
+
+<div class="ip-grid">
+  <section class="ip-panel">
+    <header>
+      <h2>Visualization</h2>
+      <p>The canvas shows the best policy found so far. When training starts, the animation will snap upright as soon as the agent discovers a stabilizing behavior.</p>
+    </header>
+    <canvas id="pendulumCanvas" width="720" height="280" aria-label="Cart-pole visualization"></canvas>
+    <div class="ip-controls">
+      <button id="startTraining">Start training</button>
+      <button id="pauseTraining" disabled>Pause</button>
+      <button id="resetTraining">Reset</button>
+    </div>
+    <div class="ip-metrics" id="metricsPanel" aria-live="polite"></div>
+  </section>
+
+  <section class="ip-panel">
+    <header>
+      <h2>Learning curve</h2>
+      <p>Each iteration keeps the top 20% of sampled policies, updates the Gaussian search distribution, and tracks the best survival time.</p>
+    </header>
+    <canvas id="scoreChart" width="720" height="280" aria-label="Training score chart"></canvas>
+    <div class="ip-log" id="trainingLog"></div>
+  </section>
+</div>
+
+<script>
+(function() {
+  const gravity = 9.8;
+  const massCart = 1.0;
+  const massPole = 0.1;
+  const totalMass = massCart + massPole;
+  const length = 0.5; // half the pole length
+  const poleMassLength = massPole * length;
+  const forceMag = 10.0;
+  const tau = 0.02; // seconds between state updates
+  const xThreshold = 2.4;
+  const thetaThresholdRadians = 12 * Math.PI / 180;
+  const maxSteps = 500;
+  const popSize = 40;
+  const eliteFrac = 0.2;
+
+  let mean = new Array(4).fill(0);
+  let std = new Array(4).fill(1);
+  let training = false;
+  let iteration = 0;
+  let bestPolicy = null;
+  let bestScore = 0;
+  let vizState = randomInitialState();
+  let scoreHistory = [];
+
+  const canvas = document.getElementById('pendulumCanvas');
+  const ctx = canvas.getContext('2d');
+  const chartCanvas = document.getElementById('scoreChart');
+  const chartCtx = chartCanvas.getContext('2d');
+  const metricsPanel = document.getElementById('metricsPanel');
+  const logPanel = document.getElementById('trainingLog');
+  const startBtn = document.getElementById('startTraining');
+  const pauseBtn = document.getElementById('pauseTraining');
+  const resetBtn = document.getElementById('resetTraining');
+
+  startBtn.addEventListener('click', () => {
+    if (training) return;
+    training = true;
+    startBtn.disabled = true;
+    pauseBtn.disabled = false;
+    startBtn.textContent = iteration === 0 ? 'Training…' : 'Resume training';
+    trainIteration();
+  });
+
+  pauseBtn.addEventListener('click', () => {
+    training = false;
+    startBtn.disabled = false;
+    pauseBtn.disabled = true;
+    startBtn.textContent = 'Resume training';
+  });
+
+  resetBtn.addEventListener('click', () => {
+    training = false;
+    iteration = 0;
+    mean = new Array(4).fill(0);
+    std = new Array(4).fill(1);
+    bestPolicy = null;
+    bestScore = 0;
+    scoreHistory = [];
+    startBtn.disabled = false;
+    pauseBtn.disabled = true;
+    startBtn.textContent = 'Start training';
+    updateMetricsDisplay();
+    drawChart();
+  });
+
+  function randomInitialState() {
+    return {
+      x: (Math.random() - 0.5) * 0.1,
+      xDot: (Math.random() - 0.5) * 0.1,
+      theta: (Math.random() - 0.5) * 0.2,
+      thetaDot: (Math.random() - 0.5) * 0.1
+    };
+  }
+
+  function eulerStep(state, force) {
+    const { x, xDot, theta, thetaDot } = state;
+    const costheta = Math.cos(theta);
+    const sintheta = Math.sin(theta);
+    const temp = (force + poleMassLength * thetaDot * thetaDot * sintheta) / totalMass;
+    const thetaAcc = (gravity * sintheta - costheta * temp) /
+      (length * (4.0 / 3.0 - massPole * costheta * costheta / totalMass));
+    const xAcc = temp - poleMassLength * thetaAcc * costheta / totalMass;
+
+    const newState = {
+      x: x + tau * xDot,
+      xDot: xDot + tau * xAcc,
+      theta: theta + tau * thetaDot,
+      thetaDot: thetaDot + tau * thetaAcc
+    };
+
+    const done =
+      Math.abs(newState.x) > xThreshold ||
+      Math.abs(newState.theta) > thetaThresholdRadians;
+
+    return { state: newState, done };
+  }
+
+  function normalizeState(state) {
+    return [
+      state.x / xThreshold,
+      state.xDot / 2.0,
+      state.theta / thetaThresholdRadians,
+      state.thetaDot / 2.0
+    ];
+  }
+
+  function policyForce(weights, state) {
+    const norm = normalizeState(state);
+    const force = norm.reduce((acc, value, idx) => acc + value * weights[idx], 0);
+    return Math.max(-forceMag, Math.min(forceMag, force));
+  }
+
+  function randn() {
+    let u = 0, v = 0;
+    while (u === 0) u = Math.random();
+    while (v === 0) v = Math.random();
+    return Math.sqrt(-2.0 * Math.log(u)) * Math.cos(2.0 * Math.PI * v);
+  }
+
+  function sampleWeights() {
+    return mean.map((m, idx) => m + randn() * std[idx]);
+  }
+
+  function evaluate(weights) {
+    const episodes = 2;
+    let cumulative = 0;
+    for (let ep = 0; ep < episodes; ep++) {
+      let state = randomInitialState();
+      for (let t = 0; t < maxSteps; t++) {
+        const force = policyForce(weights, state);
+        const { state: nextState, done } = eulerStep(state, force);
+        state = nextState;
+        cumulative += 1;
+        if (done) break;
+      }
+    }
+    return cumulative / episodes;
+  }
+
+  function trainIteration() {
+    if (!training) return;
+    iteration += 1;
+    const candidates = [];
+    for (let i = 0; i < popSize; i++) {
+      const weights = sampleWeights();
+      const score = evaluate(weights);
+      candidates.push({ weights, score });
+    }
+    candidates.sort((a, b) => b.score - a.score);
+    const eliteCount = Math.max(1, Math.floor(popSize * eliteFrac));
+    const elites = candidates.slice(0, eliteCount);
+
+    mean = mean.map((_, idx) => {
+      const sum = elites.reduce((acc, e) => acc + e.weights[idx], 0);
+      return sum / eliteCount;
+    });
+    std = std.map((_, idx) => {
+      const variance = elites.reduce((acc, e) => {
+        const diff = e.weights[idx] - mean[idx];
+        return acc + diff * diff;
+      }, 0) / eliteCount;
+      return Math.sqrt(variance + 1e-6);
+    });
+
+    const champion = elites[0];
+    if (champion.score > bestScore) {
+      bestScore = champion.score;
+      bestPolicy = champion.weights.slice();
+      vizState = randomInitialState();
+    }
+
+    scoreHistory.push({ iteration, score: champion.score });
+    if (scoreHistory.length > 200) {
+      scoreHistory.shift();
+    }
+
+    updateMetricsDisplay(champion.score);
+    drawChart();
+    logPanel.textContent = `Elite mean score: ${champion.score.toFixed(1)} steps | Distribution std: ${std.map(s => s.toFixed(2)).join(', ')}`;
+
+    if (training) {
+      setTimeout(trainIteration, 0);
+    }
+  }
+
+  function updateMetricsDisplay(latest) {
+    const seconds = (bestScore * tau).toFixed(1);
+    metricsPanel.innerHTML = `
+      <strong>Iteration:</strong> ${iteration}<br>
+      <strong>Best balance:</strong> ${bestScore.toFixed(0)} steps (~${seconds} s)<br>
+      <strong>Latest elite:</strong> ${latest ? latest.toFixed(1) : '—'} steps
+    `;
+  }
+
+  function drawChart() {
+    const width = chartCanvas.width;
+    const height = chartCanvas.height;
+    chartCtx.clearRect(0, 0, width, height);
+
+    chartCtx.strokeStyle = '#d0d7de';
+    chartCtx.lineWidth = 1;
+    chartCtx.beginPath();
+    chartCtx.moveTo(40, 10);
+    chartCtx.lineTo(40, height - 30);
+    chartCtx.lineTo(width - 10, height - 30);
+    chartCtx.stroke();
+
+    if (!scoreHistory.length) return;
+
+    const yMax = Math.max(200, ...scoreHistory.map(pt => pt.score + 20));
+    const xSpan = Math.max(1, scoreHistory.length - 1);
+
+    chartCtx.strokeStyle = '#0d9488';
+    chartCtx.lineWidth = 2;
+    chartCtx.beginPath();
+
+    scoreHistory.forEach((pt, idx) => {
+      const x = 40 + (width - 60) * (idx / xSpan);
+      const y = (height - 30) - ((pt.score / yMax) * (height - 60));
+      if (idx === 0) {
+        chartCtx.moveTo(x, y);
+      } else {
+        chartCtx.lineTo(x, y);
+      }
+    });
+    chartCtx.stroke();
+
+    chartCtx.fillStyle = '#6b7280';
+    chartCtx.font = '12px/1.4 system-ui, -apple-system, BlinkMacSystemFont, sans-serif';
+    chartCtx.fillText(`${yMax.toFixed(0)} steps`, 45, 20);
+    chartCtx.fillText('0', 18, height - 28);
+  }
+
+  function render() {
+    const width = canvas.width;
+    const height = canvas.height;
+    ctx.clearRect(0, 0, width, height);
+
+    ctx.fillStyle = '#f8fafc';
+    ctx.fillRect(0, 0, width, height);
+
+    const trackY = height * 0.75;
+    ctx.strokeStyle = '#cbd5f5';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(20, trackY);
+    ctx.lineTo(width - 20, trackY);
+    ctx.stroke();
+
+    const scale = 120; // pixels per meter
+    const cartX = width / 2 + vizState.x * scale;
+    const cartWidth = 80;
+    const cartHeight = 30;
+    const cartY = trackY - cartHeight / 2;
+
+    ctx.fillStyle = '#1d4ed8';
+    ctx.fillRect(cartX - cartWidth / 2, cartY, cartWidth, cartHeight);
+
+    const poleLengthPx = length * 2 * scale;
+    const angle = vizState.theta;
+    const poleX = cartX + poleLengthPx * Math.sin(angle);
+    const poleY = cartY - cartHeight / 2 - poleLengthPx * Math.cos(angle);
+
+    ctx.strokeStyle = '#f97316';
+    ctx.lineWidth = 6;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(cartX, cartY);
+    ctx.lineTo(poleX, poleY);
+    ctx.stroke();
+
+    ctx.fillStyle = '#0f172a';
+    ctx.font = '14px/1.4 system-ui, -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.fillText(`x = ${vizState.x.toFixed(2)} m`, 20, 24);
+    ctx.fillText(`θ = ${(vizState.theta * 180 / Math.PI).toFixed(1)}°`, 20, 44);
+
+    const policy = bestPolicy;
+    const appliedForce = policy ? policyForce(policy, vizState) : 0;
+    const { state: nextState, done } = eulerStep(vizState, appliedForce);
+    vizState = done ? randomInitialState() : nextState;
+
+    requestAnimationFrame(render);
+  }
+
+  updateMetricsDisplay();
+  drawChart();
+  render();
+})();
+</script>
+
+<style>
+.ip-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 2rem;
+  margin-top: 1.5rem;
+}
+.ip-panel {
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 1.25rem;
+  background: #fff;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.05);
+}
+.ip-panel header h2 {
+  margin-top: 0;
+  margin-bottom: 0.25rem;
+}
+.ip-panel header p {
+  margin-top: 0;
+  color: #475569;
+}
+#pendulumCanvas, #scoreChart {
+  width: 100%;
+  max-width: 100%;
+  border: 1px solid #cbd5f5;
+  border-radius: 8px;
+  background: #f8fafc;
+  display: block;
+  margin-top: 0.75rem;
+}
+.ip-controls {
+  margin-top: 0.75rem;
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+.ip-controls button {
+  border: none;
+  border-radius: 6px;
+  padding: 0.5rem 1rem;
+  font-size: 0.95rem;
+  cursor: pointer;
+  background: #1d4ed8;
+  color: #fff;
+  transition: background 0.2s ease;
+}
+.ip-controls button[disabled] {
+  background: #94a3b8;
+  cursor: not-allowed;
+}
+#resetTraining {
+  background: #f97316;
+}
+#pauseTraining {
+  background: #0f766e;
+}
+.ip-metrics {
+  margin-top: 0.75rem;
+  font-family: "IBM Plex Mono", SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace;
+  font-size: 0.9rem;
+  color: #0f172a;
+}
+.ip-log {
+  margin-top: 0.75rem;
+  font-size: 0.9rem;
+  font-family: "IBM Plex Mono", SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace;
+  color: #475569;
+}
+@media (max-width: 600px) {
+  .ip-controls {
+    flex-direction: column;
+  }
+}
+</style>
