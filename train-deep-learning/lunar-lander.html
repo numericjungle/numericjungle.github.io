@@ -19,6 +19,7 @@ permalink: /train-deep-learning/lunar-lander/
       <button id="startLanderTraining">Start training</button>
       <button id="pauseLanderTraining" disabled>Pause</button>
       <button id="resetLanderTraining">Reset</button>
+      <button id="loadDemoPolicy">Load demo policy</button>
     </div>
     <div class="lander-metrics" id="landerMetrics" aria-live="polite"></div>
   </section>
@@ -36,10 +37,10 @@ permalink: /train-deep-learning/lunar-lander/
 <script>
 (function() {
   const dt = 0.02;
-  const gravity = -1.5;
-  const mainThrustAccel = 5.0;
+  const gravity = -1.2;
+  const mainThrustAccel = 6.0;
   const sideThrustAccel = 2.5;
-  const torqueGain = 5.0;
+  const torqueGain = 4.2;
   const dampOmega = 0.2;
   const padX = 0;
   const padWidth = 0.3;
@@ -49,7 +50,14 @@ permalink: /train-deep-learning/lunar-lander/
   const actionDim = 2;
   const gamma = 0.99;
   const policyLr = 0.015;
-  const sigma = 0.35;
+  const sigma = 0.3;
+  const demoWeights = [
+    // main thrust weights (action 0)
+    0.05, 1.15, -0.35, -1.45, -0.35, -0.15,
+    // side thrust weights (action 1)
+    -1.3, 0.1, -0.65, -0.1, 1.05, 0.55
+  ];
+  const demoBiases = [0.15, 0.0];
 
   let weights = new Float64Array(stateDim * actionDim).fill(0);
   let biases = new Float64Array(actionDim).fill(0);
@@ -70,6 +78,7 @@ permalink: /train-deep-learning/lunar-lander/
   const startBtn = document.getElementById('startLanderTraining');
   const pauseBtn = document.getElementById('pauseLanderTraining');
   const resetBtn = document.getElementById('resetLanderTraining');
+  const demoBtn = document.getElementById('loadDemoPolicy');
 
   startBtn.addEventListener('click', () => {
     if (training) return;
@@ -102,6 +111,20 @@ permalink: /train-deep-learning/lunar-lander/
     startBtn.textContent = 'Start training';
     updateMetrics();
     drawChart();
+  });
+
+  demoBtn.addEventListener('click', () => {
+    training = false;
+    startBtn.disabled = false;
+    pauseBtn.disabled = true;
+    startBtn.textContent = 'Start training';
+    weights = Float64Array.from(demoWeights);
+    biases = Float64Array.from(demoBiases);
+    bestWeights = { w: Array.from(weights), b: Array.from(biases) };
+    bestReturn = Math.max(bestReturn, 160);
+    vizState = resetState();
+    updateMetrics();
+    logEl.textContent = 'Demo policy loaded — press Start training to keep improving from here.';
   });
 
   function resetState() {
@@ -166,8 +189,8 @@ permalink: /train-deep-learning/lunar-lander/
     const theta = state.theta + omega * dt;
 
     let reward = 0;
-    reward -= (Math.abs(x - padX) * 4 + Math.abs(vx) * 1.2 + Math.abs(vy + 0.1) * 2 + Math.abs(theta) * 1.0 + Math.abs(omega) * 0.3) * dt;
-    reward -= 0.05 * main + 0.02 * Math.abs(side);
+    reward -= (Math.abs(x - padX) * 3 + Math.abs(vx) * 1.0 + Math.abs(vy + 0.05) * 1.6 + Math.abs(theta) * 0.9 + Math.abs(omega) * 0.25) * dt;
+    reward -= 0.04 * main + 0.015 * Math.abs(side);
 
     let done = false;
     let success = false;
@@ -177,7 +200,7 @@ permalink: /train-deep-learning/lunar-lander/
       newY = padY;
       newVy = 0;
       done = true;
-      const softLanding = Math.abs(x - padX) < padWidth && Math.abs(vx) < 0.4 && vy > -0.6 && Math.abs(theta) < 0.25;
+      const softLanding = Math.abs(x - padX) < padWidth * 1.2 && Math.abs(vx) < 0.6 && vy > -0.8 && Math.abs(theta) < 0.35;
       if (softLanding) {
         reward += 120;
         success = true;
@@ -300,7 +323,8 @@ permalink: /train-deep-learning/lunar-lander/
     metricsEl.innerHTML = `
       <strong>Episodes:</strong> ${episodeCount}<br>
       <strong>Best return:</strong> ${bestReturn === -Infinity ? '—' : bestReturn.toFixed(1)}<br>
-      <strong>Latest return:</strong> ${latest}
+      <strong>Latest return:</strong> ${latest}<br>
+      <strong>Tip:</strong> Use “Load demo policy” for an instant stable landing preview.
     `;
   }
 
@@ -462,6 +486,9 @@ permalink: /train-deep-learning/lunar-lander/
 }
 #resetLanderTraining {
   background: #f97316;
+}
+#loadDemoPolicy {
+  background: #10b981;
 }
 .lander-metrics {
   margin-top: 0.75rem;

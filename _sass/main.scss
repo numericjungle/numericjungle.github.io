@@ -13,6 +13,39 @@ html {
   }
 }
 
+:root {
+  --site-bg: #ffffff;
+  --site-text: #111827;
+  --sidebar-bg: #202a37;
+  --sidebar-text: #f8fafc;
+  --link-color: #1d4ed8;
+  --link-hover: #0f172a;
+}
+
+[data-theme='dark'] {
+  --site-bg: #050914;
+  --site-text: #e2e8f0;
+  --sidebar-bg: #0b1120;
+  --sidebar-text: #e2e8f0;
+  --link-color: #93c5fd;
+  --link-hover: #bfdbfe;
+}
+
+body {
+  background-color: var(--site-bg);
+  color: var(--site-text);
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+a {
+  color: var(--link-color);
+  transition: color 0.2s ease;
+}
+
+a:hover {
+  color: var(--link-hover);
+}
+
 .center {
   text-align: center;
   text-align: -moz-center;
@@ -80,20 +113,81 @@ td pre {
 
 .sidebar {
   font-size: 0.8rem;
+  background-color: var(--sidebar-bg);
+  color: var(--sidebar-text);
+  transition: background-color 0.3s ease, color 0.3s ease;
 }
 
 .sidebar-nav-item {
   letter-spacing: calc(0.08em);
   text-transform: uppercase;
+  color: var(--sidebar-text);
+}
+
+.sidebar-nav-item:hover,
+.sidebar-nav-item:focus {
+  color: var(--link-color);
 }
 
 .sidebar .social-icons a {
-  color: rgba(255, 255, 255, 0.6);
+  color: rgba(255, 255, 255, 0.7);
   padding-right: 0.75em;
 }
 
 .sidebar .social-icons a:hover {
   text-decoration: none;
+}
+
+.theme-toggle {
+  border: none;
+  background: rgba(255, 255, 255, 0.15);
+  color: var(--sidebar-text);
+  border-radius: 999px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.45rem 0.75rem;
+  margin-top: 0.75rem;
+  cursor: pointer;
+  font-size: 0.7rem;
+  text-transform: none;
+  letter-spacing: normal;
+  transition: background 0.3s ease, color 0.3s ease;
+}
+
+.theme-toggle:focus-visible {
+  outline: 2px solid var(--link-color);
+  outline-offset: 2px;
+}
+
+.theme-toggle__pill {
+  width: 46px;
+  height: 22px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.4);
+  position: relative;
+  flex-shrink: 0;
+  margin-left: 0.75rem;
+}
+
+[data-theme='dark'] .theme-toggle__pill {
+  background: rgba(148, 163, 184, 0.7);
+}
+
+.theme-toggle__thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  transition: transform 0.3s ease, background 0.3s ease;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.4);
+}
+
+.theme-toggle[data-mode='dark'] .theme-toggle__thumb {
+  transform: translateX(24px);
 }
 
 /*****************************************************************************/
