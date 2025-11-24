@@ -27,8 +27,8 @@ Our aim is to analyze them through **thermodynamic identities**, **entropy produ
 
 A Carnot engine cyclically converts thermal energy into mechanical work while operating between two reservoirs at constant temperature:
 
-* Hot reservoir at temperature (T_H)
-* Cold reservoir at temperature (T_C)
+* Hot reservoir at temperature $T_H$
+* Cold reservoir at temperature $T_C$
 
 The cycle is **reversible**, so the total entropy generation per cycle is zero:
 
@@ -42,23 +42,23 @@ The cycle is **reversible**, so the total entropy generation per cycle is zero:
 
 The working substance performs four reversible steps:
 
-1. **Isothermal expansion** at (T_H)
-   Heat gained (Q_H), entropy change
+1. **Isothermal expansion** at $T_H$
+   Heat gained $Q_H$, entropy change
    [
    \Delta S = \frac{Q_H}{T_H}.
    ]
 
 2. **Adiabatic expansion**
-   (\Delta S = 0), temperature decreases from (T_H) to (T_C).
+   $\Delta S = 0$, temperature decreases from $T_H$ to $T_C$.
 
-3. **Isothermal compression** at (T_C)
-   Heat released (Q_C):
+3. **Isothermal compression** at $T_C$
+   Heat released $Q_C$:
    [
    -\Delta S = \frac{Q_C}{T_C}.
    ]
 
 4. **Adiabatic compression**
-   (\Delta S = 0), temperature increases from (T_C) back to (T_H).
+   $\Delta S = 0$, temperature increases from $T_C$ back to $T_H$.
 
 Reversibility implies entropy balance:
 
@@ -100,7 +100,7 @@ This is the **upper bound for any heat engine** respecting the second law.
 
 A **Carnot heat pump** is simply the reversed Carnot cycle.
 
-* Work input: (W)
+* Work input: $W$
 * Heat transported from cold to hot
 * Reversible, so Eq. (1) still holds.
 
@@ -189,8 +189,8 @@ Thus entropy production is *positive*:
 
 ## 3.1 Ideal Brayton cycle efficiency
 
-Assume ideal gas with constant (c_p) and ratio ( \gamma = c_p/c_v ).
-Let compressor pressure ratio be ( r_p = \frac{p_2}{p_1} ).
+Assume ideal gas with constant $c_p$ and ratio $\gamma = \frac{c_p}{c_v}$.
+Let compressor pressure ratio be $r_p = \frac{p_2}{p_1}$.
 
 For isentropic compression:
 
@@ -280,7 +280,7 @@ COP_{\text{HP}} = \frac{T_H}{T_H - T_C}
 \tag{12}
 ]
 
-Carnot heat pump efficiency diverges as (T_H \to T_C), highlighting that **reversible heat transfer at small (\Delta T)** is extremely efficient.
+Carnot heat pump efficiency diverges as $T_H \to T_C$, highlighting that **reversible heat transfer at small $\Delta T$** is extremely efficient.
 
 ---
 
@@ -288,9 +288,9 @@ Carnot heat pump efficiency diverges as (T_H \to T_C), highlighting that **rever
 
 | System               | Entropy generation | Reversible? | Cycle type |
 | -------------------- | ------------------ | ----------- | ---------- |
-| Carnot engine        | (0)                | Yes         | Closed     |
-| Carnot heat pump     | (0)                | Yes         | Closed     |
-| Jet engine (Brayton) | (>0)               | No          | Open       |
+| Carnot engine        | $0$                | Yes         | Closed     |
+| Carnot heat pump     | $0$                | Yes         | Closed     |
+| Jet engine (Brayton) | $>0$               | No          | Open       |
 
 Thus Carnot cycles define **bounds**, while Brayton cycles describe **real engineering behavior**.
 
@@ -300,7 +300,7 @@ Thus Carnot cycles define **bounds**, while Brayton cycles describe **real engin
 
 ### Carnot cycle (rectangular in T–S plane)
 
-* Isothermal heat transfer at constant (T_H), (T_C)
+* Isothermal heat transfer at constant $T_H$, $T_C$
 * Adiabatic vertical lines
 
 Area enclosed = work.
@@ -325,9 +325,9 @@ This geometric difference explains mathematically why:
 | ------------------ | ------------------------- | ------------------ | ------------------------------- |
 | System             | Closed, reversible        | Closed, reversible | Open, irreversible              |
 | Governing law      | 2nd law (entropy balance) | 2nd law            | Fluid dynamics + thermodynamics |
-| Efficiency formula | (1 - T_C/T_H)             | (T_H/(T_H-T_C))    | (1 - r_p^{-(\gamma-1)/\gamma})  |
-| Entropy generation | (0)                       | (0)                | (>0)                            |
-| Heat addition      | Isothermal                | Isothermal         | Constant pressure, varying (T)  |
+| Efficiency formula | $1 - T_C/T_H$             | $T_H/(T_H-T_C)$    | $1 - r_p^{-(\gamma-1)/\gamma}$  |
+| Entropy generation | $0$                       | $0$                | $>0$                            |
+| Heat addition      | Isothermal                | Isothermal         | Constant pressure, varying $T$  |
 | Existence          | Ideal limit               | Ideal limit        | Real engines                    |
 
 ---
@@ -342,4 +342,3 @@ The fundamental difference between a Carnot system and a jet engine lies in entr
 * **Jet engines** inevitably create entropy through shocks, viscous flow, turbulence, and combustion.
 
 Thus, the comparison of these three systems beautifully illustrates how **thermodynamic limits**, **cycle geometry**, and **entropy production** shape real-world physics.
-
