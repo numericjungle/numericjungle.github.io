@@ -6,7 +6,7 @@ Usage:
     python3 scrape_rss.py https://www.anthropic.com/research --output feeds/anthropic-research.xml
 """
 
-import sys, re, argparse, datetime
+import sys, re, argparse, datetime, time
 from urllib.request import urlopen, Request
 from urllib.parse import urljoin, urlparse
 from xml.sax.saxutils import escape
@@ -19,6 +19,22 @@ def fetch(url):
     req = Request(url, headers=HEADERS)
     with urlopen(req, timeout=15) as r:
         return r.read().decode("utf-8", errors="replace")
+
+
+def fetch_anthropic_content(url):
+    """Fetch a single Anthropic post and return its body as plain text paragraphs."""
+    try:
+        html = fetch(url)
+        raw = html.replace('\\"', '"')
+        # Extract text blocks from Next.js portable text JSON
+        texts = re.findall(r'"_type":"block"[^}]*?"text":"([^"]+)"', raw)
+        if not texts:
+            # fallback: grab paragraph text from HTML
+            texts = re.findall(r'<p[^>]*>([^<]{20,})</p>', html)
+        paragraphs = [t for t in texts if len(t.strip()) > 30]
+        return "\n\n".join(paragraphs[:30])  # cap at 30 paragraphs
+    except Exception:
+        return ""
 
 
 # ── site-specific extractors ──────────────────────────────────────────────────
@@ -50,7 +66,15 @@ def extract_anthropic_section(html, base_url, section):
         if title.lower() in skip_titles:
             continue
         url = urljoin(base_url, f"/{section}/{slug}")
-        items.append({"title": title, "url": url, "date": date, "summary": ""})
+        items.append({"title": title, "url": url, "date": date, "summary": None})
+
+    # fetch content only for the 30 most recent posts (sorted by date desc)
+    recent = sorted(items, key=lambda x: x.get("date") or "", reverse=True)[:30]
+    print(f"  fetching content for {len(recent)} recent posts...", end=" ", flush=True)
+    for item in recent:
+        item["summary"] = fetch_anthropic_content(item["url"])
+        time.sleep(0.2)
+    print("done")
 
     return items
 
@@ -137,8 +161,11 @@ def build_rss(feed_url, items, title=None, description=None):
         ]
         if pub_date:
             lines.append(f"      <pubDate>{pub_date}</pubDate>")
-        if item.get("summary"):
-            lines.append(f'      <description>{escape(item["summary"])}</description>')
+        summary = item.get("summary") or ""
+        if summary:
+            # wrap paragraphs in <p> tags for RSS readers
+            html_body = "".join(f"<p>{escape(p)}</p>" for p in summary.split("\n\n") if p.strip())
+            lines.append(f"      <description><![CDATA[{html_body}]]></description>")
         lines.append("    </item>")
 
     lines += ["  </channel>", "</rss>"]
