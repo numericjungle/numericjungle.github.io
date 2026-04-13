@@ -138,14 +138,13 @@ module NumericJungle
     end
 
     def self.sanitize_inline_math(text)
-      sanitize_math_tokens(text, inline: true)
+      convert_absolute_bars(sanitize_math_tokens(text, inline: true))
     end
 
     def self.sanitize_math_tokens(text, inline: false)
       return '' if text.nil?
       sanitized = text.dup
-      sanitized = sanitized.gsub('|', '&#124;') if inline && sanitized.include?('|')
-      sanitized = sanitized.gsub('*{', '_{') if sanitized.include?('*{')
+    sanitized = sanitized.gsub('*{', '_{') if sanitized.include?('*{')
       if sanitized.include?('*')
         sanitized = sanitized.gsub(/(?<=\}|[[:alnum:]])\*([[:alnum:]])/, '_\1')
         sanitized = sanitized.gsub(/(?<=\}|[[:alnum:]])\*(\\[A-Za-z]+)/) do
@@ -164,7 +163,42 @@ module NumericJungle
       sanitized = sanitized.gsub('!)', ')') if sanitized.include?('!)')
       sanitized = sanitized.gsub(/(?<!\\)</, '\\lt ') if sanitized.include?('<')
       sanitized = sanitized.gsub(/(?<!\\)>/, '\\gt ') if sanitized.include?('>')
+      sanitized = sanitized.gsub(/,\s*(?=[A-Za-z\\])/, '\\, ') if sanitized.include?(',')
+      sanitized = sanitized.gsub(/,\s*(?=\r?\n)/, '')
+      sanitized = sanitized.gsub(/,\s*$/, '')
       sanitized
+    end
+
+    def self.convert_absolute_bars(text)
+      return text unless text.include?('|')
+
+      positions = []
+      i = 0
+      while i < text.length
+        positions << i if text[i] == '|' && (i.zero? || text[i - 1] != '\\')
+        i += 1
+      end
+
+      return text if positions.empty? || positions.length.odd?
+
+      replacements = {}
+      positions.each_slice(2) do |open_idx, close_idx|
+        replacements[open_idx] = '\\lvert '
+        replacements[close_idx] = '\\rvert '
+      end
+
+      result = +''
+      i = 0
+      while i < text.length
+        if replacements.key?(i)
+          result << replacements[i]
+          i += 1
+          next
+        end
+        result << text[i]
+        i += 1
+      end
+      result
     end
 
     def self.trailing_spacing(original_newline)

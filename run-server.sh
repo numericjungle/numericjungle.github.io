@@ -83,13 +83,61 @@ if ! bundle install; then
   bundle install
 fi
 
-# 5) Build then serve
+# 5) Script flags
+prod_mode=false
+serve_args=()
+serve_arg_count=0
+
+for arg in "$@"; do
+  case "$arg" in
+    --prod)
+      prod_mode=true
+      ;;
+    *)
+      serve_args+=("$arg")
+      serve_arg_count=$((serve_arg_count + 1))
+      ;;
+  esac
+done
+
+if [[ "$prod_mode" == true ]]; then
+  export JEKYLL_ENV=production
+
+  filtered_serve_args=()
+  filtered_serve_arg_count=0
+  ignored_draft_flags=false
+  if [[ "$serve_arg_count" -gt 0 ]]; then
+    for arg in "${serve_args[@]}"; do
+      case "$arg" in
+        --drafts|-D)
+          ignored_draft_flags=true
+          ;;
+        *)
+          filtered_serve_args+=("$arg")
+          filtered_serve_arg_count=$((filtered_serve_arg_count + 1))
+          ;;
+      esac
+    done
+  fi
+  serve_args=()
+  serve_arg_count=$filtered_serve_arg_count
+  if [[ "$filtered_serve_arg_count" -gt 0 ]]; then
+    serve_args=("${filtered_serve_args[@]}")
+  fi
+
+  log "Production mode enabled (JEKYLL_ENV=production). Drafts will be excluded."
+  if [[ "$ignored_draft_flags" == true ]]; then
+    warn "Ignoring draft flags because --prod was set."
+  fi
+fi
+
+# 6) Build then serve
 log "Building site..."
 bundle exec jekyll build
 
-log "Starting server... (pass --drafts to include drafts)"
-if [[ ${1:-} != "" ]]; then
-  bundle exec jekyll serve "$@"
+log "Starting server... (pass --drafts to include drafts, or --prod to exclude drafts)"
+if [[ "$serve_arg_count" -gt 0 ]]; then
+  bundle exec jekyll serve "${serve_args[@]}"
 else
   bundle exec jekyll serve
 fi

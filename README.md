@@ -50,6 +50,9 @@ gem install bundler:2.6.6
 
 # Run the development server
 bash run-server.sh --drafts
+
+# Run in production mode without drafts
+bash run-server.sh --prod
 ```
 
 The server will be available at http://localhost:4000
