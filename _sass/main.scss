@@ -20,15 +20,40 @@ html {
   --sidebar-text: #f8fafc;
   --link-color: #1d4ed8;
   --link-hover: #0f172a;
+  --heading-color: #313131;
+  --strong-color: #303030;
+  --code-color: #bf616a;
+  --code-bg: #f9f9f9;
+  --pre-bg: #f9f9f9;
+  --blockquote-color: #7a7a7a;
+  --blockquote-border: #e5e5e5;
+  --hr-color: #eee;
+  --table-border: #e5e5e5;
+  --table-odd-bg: #f9f9f9;
+  --post-date-color: #9a9a9a;
+  --masthead-color: #505050;
 }
 
 [data-theme='dark'] {
-  --site-bg: #050914;
-  --site-text: #e2e8f0;
-  --sidebar-bg: #0b1120;
-  --sidebar-text: #e2e8f0;
-  --link-color: #93c5fd;
-  --link-hover: #bfdbfe;
+  /* Nord palette */
+  --site-bg: #2e3440;        /* nord0 */
+  --site-text: #eceff4;      /* nord6 */
+  --sidebar-bg: #242933;     /* darker than nord0 */
+  --sidebar-text: #eceff4;   /* nord6 */
+  --link-color: #88c0d0;     /* nord8 frost */
+  --link-hover: #8fbcbb;     /* nord7 frost */
+  --heading-color: #eceff4;  /* nord6 */
+  --strong-color: #eceff4;   /* nord6 */
+  --code-color: #bf616a;     /* nord11 aurora red */
+  --code-bg: #3b4252;        /* nord1 */
+  --pre-bg: #3b4252;         /* nord1 */
+  --blockquote-color: #d8dee9;   /* nord4 */
+  --blockquote-border: #4c566a;  /* nord3 */
+  --hr-color: #4c566a;           /* nord3 */
+  --table-border: #4c566a;       /* nord3 */
+  --table-odd-bg: #3b4252;       /* nord1 */
+  --post-date-color: #81a1c1;    /* nord9 */
+  --masthead-color: #88c0d0;     /* nord8 */
 }
 
 body {
@@ -130,7 +155,8 @@ td pre {
 }
 
 .sidebar .social-icons a {
-  color: rgba(255, 255, 255, 0.7);
+  color: var(--sidebar-text);
+  opacity: 0.7;
   padding-right: 0.75em;
 }
 
@@ -140,19 +166,25 @@ td pre {
 
 .theme-toggle {
   border: none;
-  background: rgba(255, 255, 255, 0.15);
+  background: transparent;
   color: var(--sidebar-text);
-  border-radius: 999px;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 0.45rem 0.75rem;
-  margin-top: 0.75rem;
+  justify-content: center;
+  padding: 0.5rem 1rem;
   cursor: pointer;
-  font-size: 0.7rem;
+  font-size: 1rem;
+  opacity: 0.6;
+  transition: opacity 0.2s ease, color 0.2s ease;
   text-transform: none;
   letter-spacing: normal;
-  transition: background 0.3s ease, color 0.3s ease;
+  width: 100%;
+  text-align: left;
+  justify-content: flex-start;
+}
+
+.theme-toggle:hover {
+  opacity: 1;
 }
 
 .theme-toggle:focus-visible {
@@ -160,34 +192,18 @@ td pre {
   outline-offset: 2px;
 }
 
-.theme-toggle__pill {
-  width: 46px;
-  height: 22px;
-  border-radius: 999px;
-  background: rgba(15, 23, 42, 0.4);
-  position: relative;
-  flex-shrink: 0;
-  margin-left: 0.75rem;
-}
-
-[data-theme='dark'] .theme-toggle__pill {
-  background: rgba(148, 163, 184, 0.7);
-}
-
-.theme-toggle__thumb {
-  width: 18px;
-  height: 18px;
+.theme-toggle__dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
-  background: #fff;
-  position: absolute;
-  top: 2px;
-  left: 2px;
-  transition: transform 0.3s ease, background 0.3s ease;
-  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.4);
+  margin-left: 0.5rem;
+  background-color: #81a1c1;   /* cool blue-gray — light mode active */
+  transition: background-color 0.3s ease;
 }
 
-.theme-toggle[data-mode='dark'] .theme-toggle__thumb {
-  transform: translateX(24px);
+[data-theme='dark'] .theme-toggle__dot {
+  background-color: #ebcb8b;   /* nord13 warm yellow — dark mode active */
 }
 
 /*****************************************************************************/
@@ -324,4 +340,132 @@ ul.posts li span {
 img[src$='#collector-coverage'] {
   display: inline;
   margin: 0 1px -3px 0;
+}
+
+/*****************************************************************************/
+/*
+/* Nord dark mode overrides
+/* Fixes hardcoded colors in poole.scss that don't respond to dark mode
+/*
+/*****************************************************************************/
+
+[data-theme='dark'] {
+  h1, h2, h3, h4, h5, h6 {
+    color: var(--heading-color);
+  }
+  strong {
+    color: var(--strong-color);
+  }
+  .post-title,
+  .page-title,
+  .post-title a {
+    color: var(--heading-color);
+  }
+  .masthead-title,
+  .masthead-title a {
+    color: var(--masthead-color);
+  }
+  .masthead-title small {
+    color: var(--post-date-color);
+  }
+  .post-date {
+    color: var(--post-date-color);
+  }
+  ul.posts li span {
+    color: var(--post-date-color);
+  }
+  code {
+    color: var(--code-color);
+    background-color: var(--code-bg);
+  }
+  pre {
+    background-color: var(--pre-bg);
+  }
+  blockquote {
+    color: var(--blockquote-color);
+    border-left-color: var(--blockquote-border);
+  }
+  hr {
+    border-top-color: var(--hr-color);
+    border-bottom-color: transparent;
+  }
+  table,
+  td,
+  th {
+    border-color: var(--table-border);
+  }
+  tbody tr:nth-child(odd) td,
+  tbody tr:nth-child(odd) th {
+    background-color: var(--table-odd-bg);
+  }
+  .anchorjs-link {
+    color: var(--heading-color);
+  }
+  .related {
+    border-top-color: var(--hr-color);
+  }
+  .pagination-item {
+    border-color: var(--table-border);
+    color: var(--post-date-color);
+  }
+  a.pagination-item:hover {
+    background-color: var(--table-odd-bg);
+  }
+  .tag-box a {
+    background-color: #4c566a;  /* nord3 */
+    color: #eceff4;             /* nord6 */
+  }
+  .tag-box a:hover {
+    background-color: #5e81ac;  /* nord10 */
+    color: #eceff4;
+  }
+
+  /* Sidebar */
+  .sidebar {
+    background-color: var(--sidebar-bg);
+    color: #d8dee9;             /* nord4 — softer than pure white */
+  }
+  .sidebar a {
+    color: #eceff4;             /* nord6 */
+  }
+  .sidebar-nav {
+    border-bottom-color: rgba(216, 222, 233, 0.15);  /* nord4 faint */
+  }
+  .sidebar-nav-item {
+    border-top-color: rgba(216, 222, 233, 0.15);
+    color: #d8dee9;             /* nord4 */
+  }
+  .sidebar-nav-item.active,
+  a.sidebar-nav-item:hover,
+  a.sidebar-nav-item:focus {
+    background-color: rgba(136, 192, 208, 0.12);  /* nord8 tint */
+    color: #88c0d0;             /* nord8 frost */
+    border-color: transparent;
+    text-decoration: none;
+  }
+  .sidebar-item p {
+    color: #81a1c1;             /* nord9 — muted */
+  }
+  .sidebar .social-icons a {
+    color: #81a1c1;             /* nord9 */
+  }
+  .sidebar .social-icons a:hover {
+    color: #88c0d0;             /* nord8 */
+  }
+
+  /* Sidebar toggle button (hamburger) */
+  .sidebar-toggle {
+    color: #4c566a;             /* nord3 */
+    background-color: #eceff4; /* nord6 */
+  }
+  .sidebar-toggle:active,
+  #sidebar-checkbox:checked ~ .sidebar-toggle {
+    color: #eceff4;
+    background-color: #4c566a; /* nord3 */
+  }
+
+  /* Masthead border */
+  .masthead {
+    border-bottom-color: #3b4252;  /* nord1 */
+  }
 }

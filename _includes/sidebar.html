@@ -33,11 +33,9 @@
   <a class="sidebar-nav-item{% if page.url == site.url %} active{% endif %}" 
       href="https://www.linkedin.com/in/sc268">About me</a>
 
-  <button type="button" id="themeToggle" class="sidebar-nav-item theme-toggle" aria-pressed="false">
-    <span class="theme-toggle__label">Switch to dark mode</span>
-    <span class="theme-toggle__pill" aria-hidden="true">
-      <span class="theme-toggle__thumb"></span>
-    </span>
+  <button type="button" id="themeToggle" class="sidebar-nav-item theme-toggle" aria-label="Toggle dark mode" aria-pressed="false">
+    <i class="theme-toggle__icon fa fa-moon-o" aria-hidden="true"></i>
+    <span class="theme-toggle__dot" aria-hidden="true"></span>
   </button>
   </nav>
  
@@ -63,15 +61,17 @@
   const root = document.documentElement;
   const toggle = document.getElementById('themeToggle');
   if (!toggle) return;
-  const label = toggle.querySelector('.theme-toggle__label');
   const prefersDark = window.matchMedia('(prefers-color-scheme: dark)');
 
   const applyTheme = (theme, persist = true) => {
     root.dataset.theme = theme;
     toggle.dataset.mode = theme;
     toggle.setAttribute('aria-pressed', theme === 'dark');
-    if (label) {
-      label.textContent = theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode';
+    const icon = toggle.querySelector('.theme-toggle__icon');
+    if (icon) {
+      icon.className = theme === 'dark'
+        ? 'theme-toggle__icon fa fa-sun-o'
+        : 'theme-toggle__icon fa fa-moon-o';
     }
     if (persist) {
       localStorage.setItem(storageKey, theme);
