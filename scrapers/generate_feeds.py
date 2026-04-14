@@ -13,12 +13,14 @@ FEEDS = [
     {
         "url": "https://www.anthropic.com/research",
         "output": "feeds/anthropic-research.xml",
+        "self_url": "https://numericjungle.github.io/feeds/anthropic-research.xml",
         "title": "Anthropic Research",
         "description": "Research posts from Anthropic",
     },
     {
         "url": "https://www.anthropic.com/engineering",
         "output": "feeds/anthropic-engineering.xml",
+        "self_url": "https://numericjungle.github.io/feeds/anthropic-engineering.xml",
         "title": "Anthropic Engineering",
         "description": "Engineering posts from Anthropic",
     },
@@ -36,7 +38,8 @@ def generate(feed_cfg, root_dir):
     items.sort(key=lambda x: x.get("date") or "", reverse=True)
     rss = build_rss(url, items,
                     title=feed_cfg.get("title"),
-                    description=feed_cfg.get("description"))
+                    description=feed_cfg.get("description"),
+                    self_url=feed_cfg.get("self_url"))
     os.makedirs(os.path.dirname(out), exist_ok=True)
     with open(out, "w") as f:
         f.write(rss)
