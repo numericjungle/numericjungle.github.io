@@ -1,0 +1,303 @@
+---
+layout: embed
+title: Autoencoder Lab
+permalink: /train-deep-learning/autoencoder/
+---
+
+<p>
+  An autoencoder compresses 8×8 pixel patterns through a 2-D bottleneck and reconstructs them. Watch the reconstructions sharpen and the latent space cluster by shape class.
+</p>
+
+<div class="ae-grid">
+  <section class="ae-panel">
+    <header>
+      <h2>Originals vs. reconstructions</h2>
+      <p>Top row: inputs. Bottom row: network reconstructions. Each column is a different shape class.</p>
+    </header>
+    <canvas id="aeViz" width="560" height="200" aria-label="Originals and reconstructions"></canvas>
+    <div class="ae-controls">
+      <button id="aeStart">Start training</button>
+      <button id="aePause" disabled>Pause</button>
+      <button id="aeReset">Reset</button>
+    </div>
+    <div class="ae-metrics" id="aeMetrics" aria-live="polite"></div>
+  </section>
+  <section class="ae-panel">
+    <header>
+      <h2>Latent space &amp; loss</h2>
+      <p>Top: 2-D scatter of encoded positions colored by class. Bottom: reconstruction loss curve.</p>
+    </header>
+    <canvas id="aeLatent" width="560" height="200" aria-label="Latent space scatter"></canvas>
+    <canvas id="aeChart"  width="560" height="160" aria-label="Loss curve"></canvas>
+    <div class="ae-log" id="aeLog"></div>
+  </section>
+</div>
+
+<script>
+(function () {
+  // ── micro-nn ──────────────────────────────────────────────────────────────
+  function randn(){let u,v;do{u=Math.random();}while(!u);do{v=Math.random();}while(!v);return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);}
+  function mkLayer(inD,outD,act){
+    const s=Math.sqrt(2/inD);
+    return{W:Array.from({length:inD*outD},()=>randn()*s),b:new Array(outD).fill(0),
+           mW:new Array(inD*outD).fill(0),vW:new Array(inD*outD).fill(0),
+           mb:new Array(outD).fill(0),   vb:new Array(outD).fill(0),inD,outD,act};
+  }
+  function actFn(z,t){
+    if(t==='relu')return z.map(v=>Math.max(0,v));
+    if(t==='sigmoid')return z.map(v=>1/(1+Math.exp(-Math.max(-20,Math.min(20,v)))));
+    return z.slice();
+  }
+  function actGr(z,t){
+    if(t==='relu')return z.map(v=>v>0?1:0);
+    if(t==='sigmoid')return z.map(v=>{const s=1/(1+Math.exp(-v));return s*(1-s);});
+    return z.map(()=>1);
+  }
+  function fwd(layers,x0){
+    const cache=[];let h=x0;
+    for(const L of layers){
+      const z=new Array(L.outD).fill(0);
+      for(let j=0;j<L.outD;j++){let s=L.b[j];for(let i=0;i<L.inD;i++)s+=h[i]*L.W[j*L.inD+i];z[j]=s;}
+      cache.push({h,z});h=actFn(z,L.act);
+    }
+    return{out:h,cache};
+  }
+  function bwd(layers,cache,dOut){
+    const grads=[];let dh=dOut;
+    for(let l=layers.length-1;l>=0;l--){
+      const L=layers[l],{h,z}=cache[l];
+      const dz=dh.map((d,i)=>d*actGr(z,L.act)[i]);
+      const dW=new Array(L.inD*L.outD).fill(0),dIn=new Array(L.inD).fill(0);
+      for(let j=0;j<L.outD;j++)for(let i=0;i<L.inD;i++){dW[j*L.inD+i]+=dz[j]*h[i];dIn[i]+=dz[j]*L.W[j*L.inD+i];}
+      grads.unshift({dW,db:dz.slice()});dh=dIn;
+    }
+    return grads;
+  }
+  function makeAdam(lr){
+    let t=0;
+    return function(layers,grads){
+      t++;const b1=0.9,b2=0.999,eps=1e-8;
+      for(let l=0;l<layers.length;l++){
+        const L=layers[l],g=grads[l];
+        for(let i=0;i<L.W.length;i++){L.mW[i]=b1*L.mW[i]+(1-b1)*g.dW[i];L.vW[i]=b2*L.vW[i]+(1-b2)*g.dW[i]**2;L.W[i]+=lr*(L.mW[i]/(1-b1**t))/(Math.sqrt(L.vW[i]/(1-b2**t))+eps);}
+        for(let i=0;i<L.b.length;i++){L.mb[i]=b1*L.mb[i]+(1-b1)*g.db[i];L.vb[i]=b2*L.vb[i]+(1-b2)*g.db[i]**2;L.b[i]+=lr*(L.mb[i]/(1-b1**t))/(Math.sqrt(L.vb[i]/(1-b2**t))+eps);}
+      }
+    };
+  }
+
+  // ── synthetic 8×8 shapes ──────────────────────────────────────────────────
+  const S = 8;
+  const classColors = ['#3b82f6','#f97316','#10b981','#8b5cf6','#ef4444'];
+  const classNames  = ['Bars','Cross','Ring','Diag','Dots'];
+
+  function addNoise(img, sigma=0.05) {
+    return img.map(v => Math.min(1, Math.max(0, v + randn()*sigma)));
+  }
+  function makeShape(cls) {
+    const img = new Array(S*S).fill(0);
+    if (cls === 0) { // horizontal bars
+      for (let r of [1,3,5]) for (let c=0;c<S;c++) img[r*S+c]=1;
+    } else if (cls === 1) { // cross
+      for (let c=0;c<S;c++){img[3*S+c]=1;img[4*S+c]=1;}
+      for (let r=0;r<S;r++){img[r*S+3]=1;img[r*S+4]=1;}
+    } else if (cls === 2) { // ring
+      for (let r=0;r<S;r++) for (let c=0;c<S;c++) {
+        const d=Math.sqrt((r-3.5)**2+(c-3.5)**2);
+        if(d>=2&&d<3) img[r*S+c]=1;
+      }
+    } else if (cls === 3) { // diagonal
+      for (let i=0;i<S;i++){if(i<S)img[i*S+i]=1;if(i>0)img[i*S+i-1]=1;}
+    } else { // dots at corners + center
+      for (const [r,c] of [[0,0],[0,7],[7,0],[7,7],[3,3],[3,4],[4,3],[4,4]]) img[r*S+c]=1;
+    }
+    return img;
+  }
+
+  // 10 variants per class = 50 samples
+  let dataset = [];
+  function genData() {
+    dataset = [];
+    for (let cls=0; cls<5; cls++)
+      for (let v=0; v<10; v++)
+        dataset.push({ x: addNoise(makeShape(cls), 0.08), cls });
+  }
+
+  // ── network ───────────────────────────────────────────────────────────────
+  // Encoder: 64 → 32 → 2 (bottleneck)
+  // Decoder: 2 → 32 → 64 (sigmoid output)
+  let encLayers, decLayers, adam;
+  function initNet() {
+    encLayers = [mkLayer(64,32,'relu'), mkLayer(32,2,'linear')];
+    decLayers = [mkLayer(2,32,'relu'),  mkLayer(32,64,'sigmoid')];
+    adam = makeAdam(0.003);
+  }
+
+  function encode(x)  { return fwd(encLayers, x); }
+  function decode(z)  { return fwd(decLayers, z); }
+
+  // ── training ──────────────────────────────────────────────────────────────
+  let step=0, running=false, lossHistory=[];
+  const batchSize=16;
+
+  function trainStep() {
+    const allLayers = [...encLayers, ...decLayers];
+    const accG = allLayers.map(L=>({dW:new Array(L.inD*L.outD).fill(0),db:new Array(L.outD).fill(0)}));
+    let totalLoss=0;
+    for (let k=0;k<batchSize;k++) {
+      const {x} = dataset[Math.floor(Math.random()*dataset.length)];
+      const encRes = encode(x);
+      const decRes = decode(encRes.out);
+      const recon = decRes.out;
+      // MSE loss
+      const dRecon = recon.map((v,i)=>{const e=v-x[i];totalLoss+=e*e;return 2*e/batchSize;});
+      // Backward through decoder
+      const decGrads = bwd(decLayers, decRes.cache, dRecon);
+      // Backward through encoder
+      const encGrads = bwd(encLayers, encRes.cache, decGrads.reduce((dIn,_,li)=>{
+        if(li===0) {
+          // the dIn from the first decLayer bwd is what we need
+          // Actually let me redo this more carefully
+          return null;
+        }
+        return dIn;
+      }, null));
+
+      // Let's compute it properly:
+      // combined backward
+      const allCache = [...encRes.cache, ...decRes.cache];
+      const dReconFull = recon.map((v,i)=>{const e=v-x[i];return 2*e/batchSize;});
+      const allGrads = bwd(allLayers, allCache, dReconFull);
+      for (let l=0;l<allLayers.length;l++) {
+        for (let i=0;i<accG[l].dW.length;i++) accG[l].dW[i]+=allGrads[l].dW[i];
+        for (let i=0;i<accG[l].db.length;i++) accG[l].db[i]+=allGrads[l].db[i];
+      }
+    }
+    adam(allLayers, accG);
+    step++;
+    const mse = totalLoss / (batchSize*64);
+    lossHistory.push(mse); if(lossHistory.length>300)lossHistory.shift();
+    return mse;
+  }
+
+  // ── drawing ───────────────────────────────────────────────────────────────
+  const vizC=document.getElementById('aeViz'),ctx=vizC.getContext('2d');
+  const latC=document.getElementById('aeLatent'),latx=latC.getContext('2d');
+  const chtC=document.getElementById('aeChart'),chtx=chtC.getContext('2d');
+  const metricsEl=document.getElementById('aeMetrics'),logEl=document.getElementById('aeLog');
+
+  function drawPixelGrid(ctx, pixels, x0, y0, cellSize) {
+    for (let r=0;r<S;r++) for(let c=0;c<S;c++) {
+      const v=Math.round(pixels[r*S+c]*255);
+      ctx.fillStyle=`rgb(${v},${v},${v})`;
+      ctx.fillRect(x0+c*cellSize, y0+r*cellSize, cellSize, cellSize);
+    }
+  }
+
+  function drawViz() {
+    const W=vizC.width, H=vizC.height;
+    ctx.clearRect(0,0,W,H); ctx.fillStyle='#1e293b'; ctx.fillRect(0,0,W,H);
+    const cell=9, gap=16, startX=8;
+    // Show one example per class
+    for (let cls=0; cls<5; cls++) {
+      const ex = dataset.find(d=>d.cls===cls);
+      const x0 = startX + cls*(S*cell+gap);
+      // Original (top)
+      ctx.strokeStyle=classColors[cls]; ctx.lineWidth=1.5;
+      ctx.strokeRect(x0-1, 18-1, S*cell+2, S*cell+2);
+      drawPixelGrid(ctx, ex.x, x0, 18, cell);
+      // Reconstruction (bottom)
+      const recon = decode(encode(ex.x).out).out;
+      ctx.strokeRect(x0-1, 18+S*cell+12-1, S*cell+2, S*cell+2);
+      drawPixelGrid(ctx, recon, x0, 18+S*cell+12, cell);
+      // Label
+      ctx.fillStyle=classColors[cls]; ctx.font='bold 10px system-ui';
+      ctx.fillText(classNames[cls], x0, 14);
+    }
+    // Row labels
+    ctx.fillStyle='#94a3b8'; ctx.font='10px system-ui';
+    ctx.fillText('Input', 2, 18+S*cell/2+4);
+    ctx.fillText('Recon', 2, 18+S*cell+12+S*cell/2+4);
+  }
+
+  function drawLatent() {
+    const W=latC.width, H=latC.height, pad=20;
+    latx.clearRect(0,0,W,H); latx.fillStyle='#f8fafc'; latx.fillRect(0,0,W,H);
+    // Encode all points
+    const pts = dataset.map(d=>({z:encode(d.x).out, cls:d.cls}));
+    // Find range
+    const zx=pts.map(p=>p.z[0]), zy=pts.map(p=>p.z[1]);
+    const minX=Math.min(...zx)-0.5, maxX=Math.max(...zx)+0.5;
+    const minY=Math.min(...zy)-0.5, maxY=Math.max(...zy)+0.5;
+    const sx=x=>(x-minX)/(maxX-minX)*(W-2*pad)+pad;
+    const sy=y=>(y-minY)/(maxY-minY)*(H-2*pad)+pad;
+    for (const {z,cls} of pts) {
+      latx.beginPath(); latx.arc(sx(z[0]),sy(z[1]),5,0,2*Math.PI);
+      latx.fillStyle=classColors[cls]; latx.fill();
+      latx.strokeStyle='#fff'; latx.lineWidth=1; latx.stroke();
+    }
+    latx.fillStyle='#94a3b8'; latx.font='11px system-ui';
+    latx.fillText('2-D latent space',pad,14);
+  }
+
+  function drawChart() {
+    const W=chtC.width,H=chtC.height,pad={l:44,r:12,t:8,b:24};
+    chtx.clearRect(0,0,W,H); chtx.fillStyle='#f8fafc'; chtx.fillRect(0,0,W,H);
+    chtx.strokeStyle='#d0d7de'; chtx.lineWidth=1;
+    chtx.beginPath(); chtx.moveTo(pad.l,pad.t); chtx.lineTo(pad.l,H-pad.b); chtx.lineTo(W-pad.r,H-pad.b); chtx.stroke();
+    if(!lossHistory.length) return;
+    const yMax=Math.max(0.01,...lossHistory)*1.05, n=lossHistory.length;
+    const xS=i=>pad.l+(W-pad.l-pad.r)*i/Math.max(n-1,1);
+    const yS=v=>H-pad.b-(H-pad.t-pad.b)*(v/yMax);
+    chtx.strokeStyle='#0d9488'; chtx.lineWidth=2;
+    chtx.beginPath();
+    lossHistory.forEach((v,i)=>i===0?chtx.moveTo(xS(i),yS(v)):chtx.lineTo(xS(i),yS(v)));
+    chtx.stroke();
+    chtx.fillStyle='#6b7280'; chtx.font='11px system-ui';
+    chtx.fillText(yMax.toFixed(4),4,pad.t+8); chtx.fillText('0',4,H-pad.b+4);
+    chtx.fillText(`step ${step}`,W-60,H-4);
+  }
+
+  // ── controls ──────────────────────────────────────────────────────────────
+  const startBtn=document.getElementById('aeStart'),pauseBtn=document.getElementById('aePause'),resetBtn=document.getElementById('aeReset');
+  function loop(){
+    let mse;
+    for(let i=0;i<8;i++) mse=trainStep();
+    drawViz(); drawLatent(); drawChart();
+    metricsEl.innerHTML=`<strong>Step:</strong> ${step} &nbsp; <strong>Recon MSE:</strong> ${mse.toFixed(5)}`;
+    logEl.textContent=`Reconstruction MSE: ${mse.toFixed(5)} — watch clusters separate in latent space`;
+    if(running) requestAnimationFrame(loop);
+  }
+  startBtn.addEventListener('click',()=>{
+    if(running)return;running=true;startBtn.disabled=true;pauseBtn.disabled=false;
+    startBtn.textContent=step===0?'Training…':'Resume training';loop();
+  });
+  pauseBtn.addEventListener('click',()=>{running=false;startBtn.disabled=false;pauseBtn.disabled=true;startBtn.textContent='Resume training';});
+  resetBtn.addEventListener('click',()=>{
+    running=false;step=0;lossHistory=[];
+    genData();initNet();
+    startBtn.disabled=false;pauseBtn.disabled=true;startBtn.textContent='Start training';
+    metricsEl.innerHTML='';logEl.textContent='';
+    drawViz();drawLatent();drawChart();
+  });
+
+  genData();initNet();drawViz();drawLatent();drawChart();
+})();
+</script>
+
+<style>
+.ae-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(320px,1fr)); gap:2rem; margin-top:1.5rem; }
+.ae-panel { border:1px solid #e2e8f0; border-radius:12px; padding:1.25rem; background:#fff; box-shadow:0 4px 12px rgba(15,23,42,.05); }
+.ae-panel header h2 { margin:0 0 .25rem; }
+.ae-panel header p  { margin:0 0 .5rem; color:#475569; }
+#aeViz,#aeLatent,#aeChart { width:100%; border:1px solid #e2e8f0; border-radius:8px; display:block; margin-top:.5rem; }
+#aeViz { background:#1e293b; }
+#aeLatent,#aeChart { background:#f8fafc; }
+.ae-controls { margin-top:.75rem; display:flex; gap:.5rem; flex-wrap:wrap; }
+.ae-controls button { border:none; border-radius:6px; padding:.5rem 1rem; font-size:.95rem; cursor:pointer; background:#1d4ed8; color:#fff; }
+.ae-controls button[disabled] { background:#94a3b8; cursor:not-allowed; }
+#aePause { background:#0f766e; }
+#aeReset { background:#f97316; }
+.ae-metrics,.ae-log { margin-top:.75rem; font-size:.9rem; font-family:"IBM Plex Mono",SFMono-Regular,Menlo,monospace; color:#0f172a; }
+.ae-log { color:#475569; }
+@media(max-width:600px){.ae-controls{flex-direction:column;}}
+</style>

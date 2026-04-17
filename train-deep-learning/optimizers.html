@@ -1,0 +1,255 @@
+---
+layout: embed
+title: Optimizer Playground
+permalink: /train-deep-learning/optimizers/
+---
+
+<p>
+  Three identical networks train on the same dataset simultaneously — one with SGD, one with Adagrad, one with Adam. Watch how quickly each loss falls and how stable the curves are near convergence.
+</p>
+
+<div class="op-grid">
+  <section class="op-panel">
+    <header>
+      <h2>Loss curves</h2>
+      <p>Lower is better. Each optimizer uses the same learning rate schedule and the same mini-batches.</p>
+    </header>
+    <canvas id="opChart" width="640" height="300" aria-label="Loss comparison chart"></canvas>
+    <div class="op-legend">
+      <span class="op-dot" style="background:#3b82f6"></span> SGD (lr 0.05) &nbsp;
+      <span class="op-dot" style="background:#f97316"></span> Adagrad (lr 0.1) &nbsp;
+      <span class="op-dot" style="background:#10b981"></span> Adam (lr 0.005)
+    </div>
+    <div class="op-controls">
+      <button id="opStart">Start training</button>
+      <button id="opPause" disabled>Pause</button>
+      <button id="opReset">Reset</button>
+    </div>
+    <div class="op-metrics" id="opMetrics" aria-live="polite"></div>
+  </section>
+  <section class="op-panel">
+    <header>
+      <h2>Current curve fits</h2>
+      <p>Same data (dots), three different fitted curves after the same number of steps.</p>
+    </header>
+    <canvas id="opViz" width="640" height="300" aria-label="Curve comparison"></canvas>
+    <div class="op-log" id="opLog"></div>
+  </section>
+</div>
+
+<script>
+(function () {
+  // ── micro-nn ──────────────────────────────────────────────────────────────
+  function randn(){let u,v;do{u=Math.random();}while(!u);do{v=Math.random();}while(!v);return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);}
+  function mkLayer(inD,outD,act){
+    const s=Math.sqrt(2/inD);
+    return{W:Array.from({length:inD*outD},()=>randn()*s),b:new Array(outD).fill(0),
+           mW:new Array(inD*outD).fill(0),vW:new Array(inD*outD).fill(0),
+           mb:new Array(outD).fill(0),   vb:new Array(outD).fill(0),
+           gW:new Array(inD*outD).fill(0),gb:new Array(outD).fill(0), // adagrad
+           inD,outD,act};
+  }
+  function actFn(z,t){return t==='relu'?z.map(v=>Math.max(0,v)):z.slice();}
+  function actGr(z,t){return t==='relu'?z.map(v=>v>0?1:0):z.map(()=>1);}
+  function fwd(layers,x0){
+    const cache=[];let h=x0;
+    for(const L of layers){
+      const z=new Array(L.outD).fill(0);
+      for(let j=0;j<L.outD;j++){let s=L.b[j];for(let i=0;i<L.inD;i++)s+=h[i]*L.W[j*L.inD+i];z[j]=s;}
+      cache.push({h,z});h=actFn(z,L.act);
+    }
+    return{out:h,cache};
+  }
+  function bwd(layers,cache,dOut){
+    const grads=[];let dh=dOut;
+    for(let l=layers.length-1;l>=0;l--){
+      const L=layers[l],{h,z}=cache[l];
+      const dz=dh.map((d,i)=>d*actGr(z,L.act)[i]);
+      const dW=new Array(L.inD*L.outD).fill(0),dIn=new Array(L.inD).fill(0);
+      for(let j=0;j<L.outD;j++)for(let i=0;i<L.inD;i++){dW[j*L.inD+i]+=dz[j]*h[i];dIn[i]+=dz[j]*L.W[j*L.inD+i];}
+      grads.unshift({dW,db:dz.slice()});dh=dIn;
+    }
+    return grads;
+  }
+
+  // ── optimizers ────────────────────────────────────────────────────────────
+  function sgdUpdate(layers,grads,lr){
+    for(let l=0;l<layers.length;l++){
+      const L=layers[l],g=grads[l];
+      for(let i=0;i<L.W.length;i++)L.W[i]+=lr*g.dW[i];
+      for(let i=0;i<L.b.length;i++)L.b[i]+=lr*g.db[i];
+    }
+  }
+  function adagradUpdate(layers,grads,lr){
+    const eps=1e-8;
+    for(let l=0;l<layers.length;l++){
+      const L=layers[l],g=grads[l];
+      for(let i=0;i<L.W.length;i++){L.gW[i]+=g.dW[i]**2;L.W[i]+=lr/(Math.sqrt(L.gW[i])+eps)*g.dW[i];}
+      for(let i=0;i<L.b.length;i++){L.gb[i]+=g.db[i]**2;L.b[i]+=lr/(Math.sqrt(L.gb[i])+eps)*g.db[i];}
+    }
+  }
+  function makeAdam(lr){
+    let t=0;
+    return function(layers,grads){
+      t++;const b1=0.9,b2=0.999,eps=1e-8;
+      for(let l=0;l<layers.length;l++){
+        const L=layers[l],g=grads[l];
+        for(let i=0;i<L.W.length;i++){L.mW[i]=b1*L.mW[i]+(1-b1)*g.dW[i];L.vW[i]=b2*L.vW[i]+(1-b2)*g.dW[i]**2;L.W[i]+=lr*(L.mW[i]/(1-b1**t))/(Math.sqrt(L.vW[i]/(1-b2**t))+eps);}
+        for(let i=0;i<L.b.length;i++){L.mb[i]=b1*L.mb[i]+(1-b1)*g.db[i];L.vb[i]=b2*L.vb[i]+(1-b2)*g.db[i]**2;L.b[i]+=lr*(L.mb[i]/(1-b1**t))/(Math.sqrt(L.vb[i]/(1-b2**t))+eps);}
+      }
+    };
+  }
+
+  // ── dataset ───────────────────────────────────────────────────────────────
+  const N=40;
+  let data=[];
+  function genData(){
+    data=[];
+    for(let i=0;i<N;i++){
+      const x=i/(N-1);
+      const y=Math.sin(2*Math.PI*x)+0.4*Math.sin(4*Math.PI*x)+randn()*0.12;
+      data.push([x,y]);
+    }
+  }
+
+  // ── three networks ────────────────────────────────────────────────────────
+  const arch=()=>[mkLayer(1,12,'relu'),mkLayer(12,12,'relu'),mkLayer(12,1,'linear')];
+  let nets,adamOpt;
+  function initNets(){
+    nets=[arch(),arch(),arch()];
+    adamOpt=makeAdam(0.005);
+  }
+
+  // Compute gradients for a batch (shared across optimizers, sampled once per step)
+  function computeGrads(layers,batch){
+    const accG=layers.map(L=>({dW:new Array(L.inD*L.outD).fill(0),db:new Array(L.outD).fill(0)}));
+    let loss=0;
+    for(const[x,y]of batch){
+      const{out,cache}=fwd(layers,[x]);
+      const err=out[0]-y; loss+=err*err;
+      const grads=bwd(layers,cache,[2*err/batch.length]);
+      for(let l=0;l<layers.length;l++){
+        for(let i=0;i<accG[l].dW.length;i++)accG[l].dW[i]+=grads[l].dW[i];
+        for(let i=0;i<accG[l].db.length;i++)accG[l].db[i]+=grads[l].db[i];
+      }
+    }
+    return{grads:accG,loss:loss/batch.length};
+  }
+
+  let step=0,running=false;
+  const lossHistories=[[],[],[]];
+  const batchSize=16;
+
+  function trainStep(){
+    // sample same batch for all optimizers
+    const batch=[];
+    for(let k=0;k<batchSize;k++) batch.push(data[Math.floor(Math.random()*N)]);
+    const losses=[];
+    for(let ni=0;ni<3;ni++){
+      const{grads,loss}=computeGrads(nets[ni],batch);
+      if(ni===0) sgdUpdate(nets[ni],grads,0.05);
+      else if(ni===1) adagradUpdate(nets[ni],grads,0.1);
+      else adamOpt(nets[ni],grads);
+      losses.push(loss);
+      lossHistories[ni].push(loss);
+      if(lossHistories[ni].length>300)lossHistories[ni].shift();
+    }
+    step++;
+    return losses;
+  }
+
+  // ── drawing ───────────────────────────────────────────────────────────────
+  const chtC=document.getElementById('opChart'),chtx=chtC.getContext('2d');
+  const vizC=document.getElementById('opViz'),vctx=vizC.getContext('2d');
+  const metricsEl=document.getElementById('opMetrics'),logEl=document.getElementById('opLog');
+  const colors=['#3b82f6','#f97316','#10b981'];
+  const names=['SGD','Adagrad','Adam'];
+
+  function drawChart(){
+    const W=chtC.width,H=chtC.height,pad={l:44,r:12,t:12,b:28};
+    chtx.clearRect(0,0,W,H);chtx.fillStyle='#f8fafc';chtx.fillRect(0,0,W,H);
+    chtx.strokeStyle='#d0d7de';chtx.lineWidth=1;
+    chtx.beginPath();chtx.moveTo(pad.l,pad.t);chtx.lineTo(pad.l,H-pad.b);chtx.lineTo(W-pad.r,H-pad.b);chtx.stroke();
+    const allLoss=lossHistories.flat();
+    if(!allLoss.length)return;
+    const yMax=Math.max(0.02,...allLoss)*1.05;
+    for(let ni=0;ni<3;ni++){
+      const hist=lossHistories[ni];if(!hist.length)continue;
+      const n=hist.length;
+      const xS=i=>pad.l+(W-pad.l-pad.r)*i/Math.max(n-1,1);
+      const yS=v=>H-pad.b-(H-pad.t-pad.b)*(v/yMax);
+      chtx.strokeStyle=colors[ni];chtx.lineWidth=2;
+      chtx.beginPath();hist.forEach((v,i)=>i===0?chtx.moveTo(xS(i),yS(v)):chtx.lineTo(xS(i),yS(v)));chtx.stroke();
+    }
+    chtx.fillStyle='#6b7280';chtx.font='11px system-ui';
+    chtx.fillText(yMax.toFixed(3),4,pad.t+8);chtx.fillText('0',4,H-pad.b+4);
+    chtx.fillText(`step ${step}`,W-60,H-4);
+  }
+
+  function drawViz(){
+    const W=vizC.width,H=vizC.height,pad={l:44,r:12,t:12,b:28};
+    vctx.clearRect(0,0,W,H);vctx.fillStyle='#f8fafc';vctx.fillRect(0,0,W,H);
+    const yMin=-2,yMax=2;
+    const xS=x=>pad.l+x*(W-pad.l-pad.r);
+    const yS=y=>H-pad.b-(y-yMin)/(yMax-yMin)*(H-pad.t-pad.b);
+    vctx.strokeStyle='#e2e8f0';vctx.lineWidth=1;
+    for(const yv of [-1,0,1]){const cy=yS(yv);vctx.beginPath();vctx.moveTo(pad.l,cy);vctx.lineTo(W-pad.r,cy);vctx.stroke();}
+    vctx.strokeStyle='#94a3b8';vctx.lineWidth=1.5;
+    vctx.beginPath();vctx.moveTo(pad.l,pad.t);vctx.lineTo(pad.l,H-pad.b);vctx.stroke();
+    // data
+    vctx.fillStyle='#1e293b';
+    for(const[x,y]of data){vctx.beginPath();vctx.arc(xS(x),yS(y),2.5,0,2*Math.PI);vctx.fill();}
+    // curves
+    for(let ni=0;ni<3;ni++){
+      vctx.strokeStyle=colors[ni];vctx.lineWidth=2;vctx.lineJoin='round';
+      vctx.beginPath();
+      for(let i=0;i<=100;i++){const x=i/100;const y=fwd(nets[ni],[x]).out[0];i===0?vctx.moveTo(xS(x),yS(y)):vctx.lineTo(xS(x),yS(y));}
+      vctx.stroke();
+    }
+    // legend labels
+    vctx.font='bold 11px system-ui';
+    for(let ni=0;ni<3;ni++){vctx.fillStyle=colors[ni];vctx.fillText(names[ni],W-60,28+ni*16);}
+  }
+
+  // ── controls ──────────────────────────────────────────────────────────────
+  const startBtn=document.getElementById('opStart'),pauseBtn=document.getElementById('opPause'),resetBtn=document.getElementById('opReset');
+  function loop(){
+    let losses;
+    for(let i=0;i<8;i++)losses=trainStep();
+    drawChart();drawViz();
+    metricsEl.innerHTML=losses.map((l,i)=>`<span style="color:${colors[i]}"><strong>${names[i]}:</strong> ${l.toFixed(5)}</span>`).join(' &nbsp; ');
+    logEl.textContent=`Step ${step} — latest batch MSE: SGD ${losses[0].toFixed(4)} | Adagrad ${losses[1].toFixed(4)} | Adam ${losses[2].toFixed(4)}`;
+    if(running)requestAnimationFrame(loop);
+  }
+  startBtn.addEventListener('click',()=>{
+    if(running)return;running=true;startBtn.disabled=true;pauseBtn.disabled=false;
+    startBtn.textContent=step===0?'Training…':'Resume training';loop();
+  });
+  pauseBtn.addEventListener('click',()=>{running=false;startBtn.disabled=false;pauseBtn.disabled=true;startBtn.textContent='Resume training';});
+  resetBtn.addEventListener('click',()=>{
+    running=false;step=0;lossHistories[0]=[];lossHistories[1]=[];lossHistories[2]=[];
+    genData();initNets();startBtn.disabled=false;pauseBtn.disabled=true;startBtn.textContent='Start training';
+    metricsEl.innerHTML='';logEl.textContent='';drawChart();drawViz();
+  });
+
+  genData();initNets();drawChart();drawViz();
+})();
+</script>
+
+<style>
+.op-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(320px,1fr)); gap:2rem; margin-top:1.5rem; }
+.op-panel { border:1px solid #e2e8f0; border-radius:12px; padding:1.25rem; background:#fff; box-shadow:0 4px 12px rgba(15,23,42,.05); }
+.op-panel header h2 { margin:0 0 .25rem; }
+.op-panel header p  { margin:0 0 .5rem; color:#475569; }
+#opChart,#opViz { width:100%; border:1px solid #e2e8f0; border-radius:8px; background:#f8fafc; display:block; margin-top:.5rem; }
+.op-legend { margin-top:.5rem; font-size:.85rem; color:#374151; }
+.op-dot { display:inline-block; width:10px; height:10px; border-radius:50%; margin-right:3px; }
+.op-controls { margin-top:.75rem; display:flex; gap:.5rem; flex-wrap:wrap; }
+.op-controls button { border:none; border-radius:6px; padding:.5rem 1rem; font-size:.95rem; cursor:pointer; background:#1d4ed8; color:#fff; }
+.op-controls button[disabled] { background:#94a3b8; cursor:not-allowed; }
+#opPause { background:#0f766e; }
+#opReset { background:#f97316; }
+.op-metrics,.op-log { margin-top:.75rem; font-size:.9rem; font-family:"IBM Plex Mono",SFMono-Regular,Menlo,monospace; color:#0f172a; }
+.op-log { color:#475569; font-size:.85rem; }
+@media(max-width:600px){.op-controls{flex-direction:column;}}
+</style>

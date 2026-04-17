@@ -1,0 +1,290 @@
+---
+layout: embed
+title: Deep Q-Network Lab
+permalink: /train-deep-learning/dqn/
+---
+
+<p>
+  A DQN agent learns to navigate a grid world to reach the goal (green) while avoiding hazards (red). Watch the Q-value heatmap update as the replay buffer fills and the target network stabilizes.
+</p>
+
+<div class="dq-grid">
+  <section class="dq-panel">
+    <header>
+      <h2>Grid world</h2>
+      <p>Background: max Q-value per cell (brighter = higher expected return). Agent shown in blue.</p>
+    </header>
+    <canvas id="dqViz" width="400" height="400" aria-label="Grid world"></canvas>
+    <div class="dq-controls">
+      <button id="dqStart">Start training</button>
+      <button id="dqPause" disabled>Pause</button>
+      <button id="dqReset">Reset</button>
+    </div>
+    <div class="dq-metrics" id="dqMetrics" aria-live="polite"></div>
+  </section>
+  <section class="dq-panel">
+    <header>
+      <h2>Episode return</h2>
+      <p>Each episode runs until the goal is reached or the step limit expires. Returns rise as the policy improves.</p>
+    </header>
+    <canvas id="dqChart" width="600" height="400" aria-label="Episode return curve"></canvas>
+    <div class="dq-log" id="dqLog"></div>
+  </section>
+</div>
+
+<script>
+(function () {
+  const ROWS=6, COLS=6, N_ACTIONS=4; // up,down,left,right
+  const GOAL={r:5,c:5}, START={r:0,c:0};
+  const HAZARDS=[{r:1,c:2},{r:2,c:4},{r:3,c:1},{r:4,c:3},{r:2,c:2}];
+  const isHazard=(r,c)=>HAZARDS.some(h=>h.r===r&&h.c===c);
+  const isGoal=(r,c)=>r===GOAL.r&&c===GOAL.c;
+
+  // ── micro-nn ──────────────────────────────────────────────────────────────
+  function randn(){let u,v;do{u=Math.random();}while(!u);do{v=Math.random();}while(!v);return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);}
+  function mkLayer(inD,outD,act){
+    const s=Math.sqrt(2/inD);
+    return{W:Array.from({length:inD*outD},()=>randn()*s),b:new Array(outD).fill(0),
+           mW:new Array(inD*outD).fill(0),vW:new Array(inD*outD).fill(0),
+           mb:new Array(outD).fill(0),   vb:new Array(outD).fill(0),inD,outD,act};
+  }
+  function fwd(layers,x0){
+    const cache=[];let h=x0;
+    for(const L of layers){
+      const z=new Array(L.outD).fill(0);
+      for(let j=0;j<L.outD;j++){let s=L.b[j];for(let i=0;i<L.inD;i++)s+=h[i]*L.W[j*L.inD+i];z[j]=s;}
+      cache.push({h,z});h=L.act==='relu'?z.map(v=>Math.max(0,v)):z.slice();
+    }
+    return{out:h,cache};
+  }
+  function bwd(layers,cache,dOut){
+    const grads=[];let dh=dOut;
+    for(let l=layers.length-1;l>=0;l--){
+      const L=layers[l],{h,z}=cache[l];
+      const ag=L.act==='relu'?z.map(v=>v>0?1:0):z.map(()=>1);
+      const dz=dh.map((d,i)=>d*ag[i]);
+      const dW=new Array(L.inD*L.outD).fill(0),dIn=new Array(L.inD).fill(0);
+      for(let j=0;j<L.outD;j++)for(let i=0;i<L.inD;i++){dW[j*L.inD+i]+=dz[j]*h[i];dIn[i]+=dz[j]*L.W[j*L.inD+i];}
+      grads.unshift({dW,db:dz.slice()});dh=dIn;
+    }
+    return grads;
+  }
+  function makeAdam(lr){
+    let t=0;
+    return function(layers,grads){
+      t++;const b1=0.9,b2=0.999,eps=1e-8;
+      for(let l=0;l<layers.length;l++){
+        const L=layers[l],g=grads[l];
+        for(let i=0;i<L.W.length;i++){L.mW[i]=b1*L.mW[i]+(1-b1)*g.dW[i];L.vW[i]=b2*L.vW[i]+(1-b2)*g.dW[i]**2;L.W[i]+=lr*(L.mW[i]/(1-b1**t))/(Math.sqrt(L.vW[i]/(1-b2**t))+eps);}
+        for(let i=0;i<L.b.length;i++){L.mb[i]=b1*L.mb[i]+(1-b1)*g.db[i];L.vb[i]=b2*L.vb[i]+(1-b2)*g.db[i]**2;L.b[i]+=lr*(L.mb[i]/(1-b1**t))/(Math.sqrt(L.vb[i]/(1-b2**t))+eps);}
+      }
+    };
+  }
+
+  // ── environment ───────────────────────────────────────────────────────────
+  function encodeState(r,c){
+    // One-hot position + normalized coords
+    const v=new Array(ROWS*COLS+2).fill(0);
+    v[r*COLS+c]=1;
+    v[ROWS*COLS]=r/(ROWS-1);
+    v[ROWS*COLS+1]=c/(COLS-1);
+    return v;
+  }
+  const stateDim=ROWS*COLS+2;
+  function step(r,c,a){
+    let nr=r,nc=c;
+    if(a===0)nr=Math.max(0,r-1);
+    else if(a===1)nr=Math.min(ROWS-1,r+1);
+    else if(a===2)nc=Math.max(0,c-1);
+    else nc=Math.min(COLS-1,c+1);
+    if(isHazard(nr,nc)){return{r:nr,c:nc,reward:-5,done:true};}
+    if(isGoal(nr,nc)){return{r:nr,c:nc,reward:10,done:true};}
+    return{r:nr,c:nc,reward:-0.1,done:false};
+  }
+
+  // ── DQN ──────────────────────────────────────────────────────────────────
+  let qNet,targetNet,adam;
+  function copyLayers(src){
+    return src.map(L=>({...L,W:L.W.slice(),b:L.b.slice(),
+      mW:L.mW.slice(),vW:L.vW.slice(),mb:L.mb.slice(),vb:L.vb.slice()}));
+  }
+  function initNet(){
+    qNet=[mkLayer(stateDim,48,'relu'),mkLayer(48,48,'relu'),mkLayer(48,N_ACTIONS,'linear')];
+    targetNet=copyLayers(qNet);
+    adam=makeAdam(0.003);
+  }
+
+  const REPLAY_CAP=2000, BATCH=32, GAMMA=0.95, TARGET_UPDATE=50, MAX_STEPS=40;
+  let replay=[],epsilon=1.0,totalSteps=0,episode=0;
+  let episodeHistory=[];
+
+  function getQ(layers,r,c){return fwd(layers,encodeState(r,c)).out;}
+  function sampleAction(r,c){
+    if(Math.random()<epsilon){return Math.floor(Math.random()*N_ACTIONS);}
+    const q=getQ(qNet,r,c);return q.indexOf(Math.max(...q));
+  }
+
+  function trainBatch(){
+    if(replay.length<BATCH) return;
+    const idx=Array.from({length:BATCH},()=>Math.floor(Math.random()*replay.length));
+    const accG=qNet.map(L=>({dW:new Array(L.inD*L.outD).fill(0),db:new Array(L.outD).fill(0)}));
+    for(const i of idx){
+      const{s,a,r,ns,done}=replay[i];
+      const{out:qVals,cache}=fwd(qNet,s);
+      const nextQ=getQ(targetNet,ns[0],ns[1]);
+      const target=done?r:r+GAMMA*Math.max(...nextQ);
+      const dOut=qVals.map((v,j)=>j===a?2*(v-target)/BATCH:0);
+      const grads=bwd(qNet,cache,dOut);
+      for(let l=0;l<qNet.length;l++){
+        for(let k=0;k<accG[l].dW.length;k++)accG[l].dW[k]+=grads[l].dW[k];
+        for(let k=0;k<accG[l].db.length;k++)accG[l].db[k]+=grads[l].db[k];
+      }
+    }
+    adam(qNet,accG);
+  }
+
+  function runEpisode(){
+    let r=START.r,c=START.c,totalR=0;
+    for(let t=0;t<MAX_STEPS;t++){
+      const a=sampleAction(r,c);
+      const{r:nr,c:nc,reward,done}=step(r,c,a);
+      replay.push({s:encodeState(r,c),a,r:reward,ns:[nr,nc],done});
+      if(replay.length>REPLAY_CAP)replay.shift();
+      totalR+=reward;
+      trainBatch();
+      totalSteps++;
+      if(totalSteps%TARGET_UPDATE===0)targetNet=copyLayers(qNet);
+      r=nr;c=nc;
+      if(done)break;
+    }
+    epsilon=Math.max(0.05,epsilon*0.995);
+    episode++;
+    episodeHistory.push(totalR);
+    if(episodeHistory.length>200)episodeHistory.shift();
+    return totalR;
+  }
+
+  // ── drawing ───────────────────────────────────────────────────────────────
+  const vizC=document.getElementById('dqViz'),ctx=vizC.getContext('2d');
+  const chtC=document.getElementById('dqChart'),chtx=chtC.getContext('2d');
+  const metricsEl=document.getElementById('dqMetrics'),logEl=document.getElementById('dqLog');
+  // Agent visualization position (animated)
+  let agR=0,agC=0;
+
+  function drawViz(){
+    const W=vizC.width,H=vizC.height;
+    ctx.clearRect(0,0,W,H);ctx.fillStyle='#0f172a';ctx.fillRect(0,0,W,H);
+    const cw=Math.floor(W/COLS),ch=Math.floor(H/ROWS);
+
+    // Compute Q heatmap
+    let qMin=Infinity,qMax=-Infinity;
+    const qGrid=[];
+    for(let r=0;r<ROWS;r++)for(let c=0;c<COLS;c++){
+      const q=Math.max(...getQ(qNet,r,c));
+      qGrid.push(q);if(q<qMin)qMin=q;if(q>qMax)qMax=q;
+    }
+    const qRange=Math.max(0.1,qMax-qMin);
+
+    for(let r=0;r<ROWS;r++)for(let c=0;c<COLS;c++){
+      const x=c*cw,y=r*ch;
+      if(isHazard(r,c)){ctx.fillStyle='rgba(239,68,68,0.6)';}
+      else if(isGoal(r,c)){ctx.fillStyle='rgba(34,197,94,0.6)';}
+      else{
+        const norm=(qGrid[r*COLS+c]-qMin)/qRange;
+        const v=Math.round(norm*180);
+        ctx.fillStyle=`rgba(${30+v},${60+v},${120+v},0.85)`;
+      }
+      ctx.fillRect(x+1,y+1,cw-2,ch-2);
+      ctx.strokeStyle='#1e293b';ctx.lineWidth=1;ctx.strokeRect(x,y,cw,ch);
+      // Grid labels
+      ctx.fillStyle='rgba(255,255,255,0.5)';ctx.font='9px system-ui';
+      if(isGoal(r,c))ctx.fillStyle='#fff';
+      ctx.fillText(isGoal(r,c)?'GOAL':isHazard(r,c)?'X':'',x+4,y+14);
+    }
+
+    // Agent
+    const ax=agC*cw,ay=agR*ch;
+    ctx.fillStyle='#f97316';
+    ctx.beginPath();ctx.arc(ax+cw/2,ay+ch/2,cw*0.3,0,2*Math.PI);ctx.fill();
+    ctx.strokeStyle='#fff';ctx.lineWidth=2;ctx.stroke();
+
+    // Best-policy path overlay
+    let pr=0,pc=0;
+    ctx.strokeStyle='rgba(251,191,36,0.7)';ctx.lineWidth=2;
+    ctx.beginPath();ctx.moveTo(pr*cw+cw/2+(Math.random()-0.5)*2,pr*ch+ch/2);
+    for(let t=0;t<MAX_STEPS;t++){
+      const q=getQ(qNet,pr,pc);const ba=q.indexOf(Math.max(...q));
+      const{r:nr,c:nc,done}=step(pr,pc,ba);
+      ctx.lineTo(nc*cw+cw/2,nr*ch+ch/2);
+      if(done)break;
+      pr=nr;pc=nc;
+    }
+    ctx.stroke();
+  }
+
+  function drawChart(){
+    const W=chtC.width,H=chtC.height,pad={l:44,r:12,t:12,b:28};
+    chtx.clearRect(0,0,W,H);chtx.fillStyle='#f8fafc';chtx.fillRect(0,0,W,H);
+    chtx.strokeStyle='#d0d7de';chtx.lineWidth=1;
+    chtx.beginPath();chtx.moveTo(pad.l,pad.t);chtx.lineTo(pad.l,H-pad.b);chtx.lineTo(W-pad.r,H-pad.b);chtx.stroke();
+    if(!episodeHistory.length)return;
+    const vals=episodeHistory,n=vals.length;
+    const yMax=Math.max(5,...vals)+2,yMin=Math.min(-6,...vals)-2;
+    const yRange=yMax-yMin;
+    const xS=i=>pad.l+(W-pad.l-pad.r)*i/Math.max(n-1,1);
+    const yS=v=>H-pad.b-(H-pad.t-pad.b)*(v-yMin)/yRange;
+    // zero line
+    chtx.strokeStyle='#e2e8f0';chtx.lineWidth=1;
+    chtx.beginPath();chtx.moveTo(pad.l,yS(0));chtx.lineTo(W-pad.r,yS(0));chtx.stroke();
+    chtx.strokeStyle='#10b981';chtx.lineWidth=2;
+    chtx.beginPath();vals.forEach((v,i)=>i===0?chtx.moveTo(xS(i),yS(v)):chtx.lineTo(xS(i),yS(v)));chtx.stroke();
+    chtx.fillStyle='#6b7280';chtx.font='11px system-ui';
+    chtx.fillText(yMax.toFixed(0),4,pad.t+8);chtx.fillText(yMin.toFixed(0),4,H-pad.b+4);
+    chtx.fillText(`ep ${episode}`,W-56,H-4);
+  }
+
+  // ── training loop ─────────────────────────────────────────────────────────
+  let running=false;
+  const startBtn=document.getElementById('dqStart'),pauseBtn=document.getElementById('dqPause'),resetBtn=document.getElementById('dqReset');
+
+  function loop(){
+    const ret=runEpisode();
+    // Update agent position for visualization
+    agR=Math.floor(Math.random()*ROWS);agC=Math.floor(Math.random()*COLS);
+    drawViz();drawChart();
+    metricsEl.innerHTML=`<strong>Episode:</strong> ${episode} &nbsp; <strong>ε:</strong> ${epsilon.toFixed(3)} &nbsp; <strong>Replay:</strong> ${replay.length}`;
+    logEl.textContent=`Episode ${episode}: return ${ret.toFixed(2)} | ε = ${epsilon.toFixed(3)} | steps = ${totalSteps}`;
+    if(running)requestAnimationFrame(loop);
+  }
+  startBtn.addEventListener('click',()=>{
+    if(running)return;running=true;startBtn.disabled=true;pauseBtn.disabled=false;
+    startBtn.textContent=episode===0?'Training…':'Resume training';loop();
+  });
+  pauseBtn.addEventListener('click',()=>{running=false;startBtn.disabled=false;pauseBtn.disabled=true;startBtn.textContent='Resume training';});
+  resetBtn.addEventListener('click',()=>{
+    running=false;replay=[];epsilon=1.0;totalSteps=0;episode=0;episodeHistory=[];agR=0;agC=0;
+    initNet();startBtn.disabled=false;pauseBtn.disabled=true;startBtn.textContent='Start training';
+    metricsEl.innerHTML='';logEl.textContent='';drawViz();drawChart();
+  });
+
+  initNet();drawViz();drawChart();
+})();
+</script>
+
+<style>
+.dq-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(320px,1fr)); gap:2rem; margin-top:1.5rem; }
+.dq-panel { border:1px solid #e2e8f0; border-radius:12px; padding:1.25rem; background:#fff; box-shadow:0 4px 12px rgba(15,23,42,.05); }
+.dq-panel header h2 { margin:0 0 .25rem; }
+.dq-panel header p  { margin:0 0 .5rem; color:#475569; }
+#dqViz { background:#0f172a; }
+#dqViz,#dqChart { width:100%; border:1px solid #e2e8f0; border-radius:8px; display:block; margin-top:.5rem; }
+#dqChart { background:#f8fafc; }
+.dq-controls { margin-top:.75rem; display:flex; gap:.5rem; flex-wrap:wrap; }
+.dq-controls button { border:none; border-radius:6px; padding:.5rem 1rem; font-size:.95rem; cursor:pointer; background:#1d4ed8; color:#fff; }
+.dq-controls button[disabled] { background:#94a3b8; cursor:not-allowed; }
+#dqPause { background:#0f766e; }
+#dqReset { background:#f97316; }
+.dq-metrics,.dq-log { margin-top:.75rem; font-size:.9rem; font-family:"IBM Plex Mono",SFMono-Regular,Menlo,monospace; color:#0f172a; }
+.dq-log { color:#475569; font-size:.82rem; }
+@media(max-width:600px){.dq-controls{flex-direction:column;}}
+</style>

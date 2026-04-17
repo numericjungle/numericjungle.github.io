@@ -1,0 +1,252 @@
+---
+layout: embed
+title: 1-D Regression Lab
+permalink: /train-deep-learning/regression/
+---
+
+<p>
+  A two-hidden-layer network fits a noisy sinusoid from scratch using Adam. Watch the predicted curve evolve from a flat line to the underlying function as training steps accumulate.
+</p>
+
+<div class="rg-grid">
+  <section class="rg-panel">
+    <header>
+      <h2>Curve fitting</h2>
+      <p>Blue dots are training data. The orange line is the network's current prediction.</p>
+    </header>
+    <canvas id="rgViz" width="600" height="280" aria-label="Regression visualization"></canvas>
+    <div class="rg-controls">
+      <button id="rgStart">Start training</button>
+      <button id="rgPause" disabled>Pause</button>
+      <button id="rgReset">Reset</button>
+    </div>
+    <div class="rg-metrics" id="rgMetrics" aria-live="polite"></div>
+  </section>
+  <section class="rg-panel">
+    <header>
+      <h2>Training loss</h2>
+      <p>Mean squared error over training steps. Each step processes a random mini-batch of 20 samples.</p>
+    </header>
+    <canvas id="rgChart" width="600" height="280" aria-label="Loss curve"></canvas>
+    <div class="rg-log" id="rgLog"></div>
+  </section>
+</div>
+
+<script>
+(function () {
+  // ── micro-nn ─────────────────────────────────────────────────────────────
+  function randn() {
+    let u, v;
+    do { u = Math.random(); } while (!u);
+    do { v = Math.random(); } while (!v);
+    return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+  }
+  function mkLayer(inD, outD, act) {
+    const s = Math.sqrt(2 / inD);
+    return {
+      W: Array.from({ length: inD * outD }, () => randn() * s),
+      b: new Array(outD).fill(0),
+      mW: new Array(inD * outD).fill(0), vW: new Array(inD * outD).fill(0),
+      mb: new Array(outD).fill(0),       vb: new Array(outD).fill(0),
+      inD, outD, act
+    };
+  }
+  function act(z, type) {
+    return type === 'relu' ? z.map(v => Math.max(0, v)) : z.slice();
+  }
+  function actG(z, type) {
+    return type === 'relu' ? z.map(v => v > 0 ? 1 : 0) : z.map(() => 1);
+  }
+  function fwd(layers, x0) {
+    const cache = []; let h = x0;
+    for (const L of layers) {
+      const z = new Array(L.outD).fill(0);
+      for (let j = 0; j < L.outD; j++) {
+        let s = L.b[j];
+        for (let i = 0; i < L.inD; i++) s += h[i] * L.W[j * L.inD + i];
+        z[j] = s;
+      }
+      cache.push({ h, z }); h = act(z, L.act);
+    }
+    return { out: h, cache };
+  }
+  function bwd(layers, cache, dOut) {
+    const grads = []; let dh = dOut;
+    for (let l = layers.length - 1; l >= 0; l--) {
+      const L = layers[l], { h, z } = cache[l];
+      const dz = dh.map((d, i) => d * actG(z, L.act)[i]);
+      const dW = new Array(L.inD * L.outD).fill(0), dIn = new Array(L.inD).fill(0);
+      for (let j = 0; j < L.outD; j++)
+        for (let i = 0; i < L.inD; i++) {
+          dW[j * L.inD + i] += dz[j] * h[i];
+          dIn[i] += dz[j] * L.W[j * L.inD + i];
+        }
+      grads.unshift({ dW, db: dz.slice() }); dh = dIn;
+    }
+    return grads;
+  }
+  function makeAdam(lr) {
+    let t = 0;
+    return function (layers, grads) {
+      t++;
+      const b1 = 0.9, b2 = 0.999, eps = 1e-8;
+      for (let l = 0; l < layers.length; l++) {
+        const L = layers[l], g = grads[l];
+        for (let i = 0; i < L.W.length; i++) {
+          L.mW[i] = b1*L.mW[i] + (1-b1)*g.dW[i];
+          L.vW[i] = b2*L.vW[i] + (1-b2)*g.dW[i]**2;
+          L.W[i] += lr * (L.mW[i]/(1-b1**t)) / (Math.sqrt(L.vW[i]/(1-b2**t)) + eps);
+        }
+        for (let i = 0; i < L.b.length; i++) {
+          L.mb[i] = b1*L.mb[i] + (1-b1)*g.db[i];
+          L.vb[i] = b2*L.vb[i] + (1-b2)*g.db[i]**2;
+          L.b[i] += lr * (L.mb[i]/(1-b1**t)) / (Math.sqrt(L.vb[i]/(1-b2**t)) + eps);
+        }
+      }
+    };
+  }
+
+  // ── dataset ───────────────────────────────────────────────────────────────
+  const N = 60;
+  let data = [];
+  function genData() {
+    data = [];
+    for (let i = 0; i < N; i++) {
+      const x = Math.random();
+      const y = 0.5*Math.sin(2*Math.PI*x) + 0.3*Math.sin(5*Math.PI*x) + randn()*0.1;
+      data.push([x, y]);
+    }
+  }
+
+  // ── network ───────────────────────────────────────────────────────────────
+  let layers, adam;
+  function initNet() {
+    layers = [mkLayer(1,24,'relu'), mkLayer(24,24,'relu'), mkLayer(24,1,'linear')];
+    adam = makeAdam(0.005);
+  }
+
+  // ── training ──────────────────────────────────────────────────────────────
+  let step = 0, running = false, lossHistory = [];
+  const batchSize = 20;
+
+  function trainStep() {
+    const accG = layers.map(L => ({ dW: new Array(L.inD*L.outD).fill(0), db: new Array(L.outD).fill(0) }));
+    let totalLoss = 0;
+    for (let k = 0; k < batchSize; k++) {
+      const [x, y] = data[Math.floor(Math.random()*N)];
+      const { out, cache } = fwd(layers, [x]);
+      const err = out[0] - y; totalLoss += err*err;
+      const grads = bwd(layers, cache, [2*err/batchSize]);
+      for (let l = 0; l < layers.length; l++) {
+        for (let i = 0; i < accG[l].dW.length; i++) accG[l].dW[i] += grads[l].dW[i];
+        for (let i = 0; i < accG[l].db.length; i++) accG[l].db[i] += grads[l].db[i];
+      }
+    }
+    adam(layers, accG); step++;
+    const mse = totalLoss / batchSize;
+    lossHistory.push(mse); if (lossHistory.length > 300) lossHistory.shift();
+    return mse;
+  }
+
+  // ── drawing ───────────────────────────────────────────────────────────────
+  const vizC = document.getElementById('rgViz'), ctx = vizC.getContext('2d');
+  const chtC = document.getElementById('rgChart'), chtx = chtC.getContext('2d');
+  const metricsEl = document.getElementById('rgMetrics');
+  const logEl = document.getElementById('rgLog');
+
+  function drawViz() {
+    const W = vizC.width, H = vizC.height, pad = {l:44,r:12,t:12,b:28};
+    ctx.clearRect(0,0,W,H); ctx.fillStyle='#f8fafc'; ctx.fillRect(0,0,W,H);
+    const xS = x => pad.l + x*(W-pad.l-pad.r);
+    const yS = y => H-pad.b - (y+1.5)/3*(H-pad.t-pad.b);
+
+    // grid
+    ctx.strokeStyle='#e2e8f0'; ctx.lineWidth=1;
+    for (const yv of [-1,-0.5,0,0.5,1]) {
+      const cy=yS(yv);
+      ctx.beginPath(); ctx.moveTo(pad.l,cy); ctx.lineTo(W-pad.r,cy); ctx.stroke();
+      ctx.fillStyle='#94a3b8'; ctx.font='11px system-ui';
+      ctx.fillText(yv.toFixed(1),2,cy+4);
+    }
+    ctx.strokeStyle='#94a3b8'; ctx.lineWidth=1.5;
+    ctx.beginPath(); ctx.moveTo(pad.l,pad.t); ctx.lineTo(pad.l,H-pad.b); ctx.stroke();
+
+    // data
+    ctx.fillStyle='#3b82f6';
+    for (const [x,y] of data) { ctx.beginPath(); ctx.arc(xS(x),yS(y),3.5,0,2*Math.PI); ctx.fill(); }
+
+    // curve
+    ctx.strokeStyle='#f97316'; ctx.lineWidth=2.5; ctx.lineJoin='round';
+    ctx.beginPath();
+    for (let i=0; i<=120; i++) {
+      const x=i/120, y=fwd(layers,[x]).out[0];
+      i===0 ? ctx.moveTo(xS(x),yS(y)) : ctx.lineTo(xS(x),yS(y));
+    }
+    ctx.stroke();
+  }
+
+  function drawChart() {
+    const W=chtC.width, H=chtC.height, pad={l:44,r:12,t:12,b:28};
+    chtx.clearRect(0,0,W,H); chtx.fillStyle='#f8fafc'; chtx.fillRect(0,0,W,H);
+    chtx.strokeStyle='#d0d7de'; chtx.lineWidth=1;
+    chtx.beginPath(); chtx.moveTo(pad.l,pad.t); chtx.lineTo(pad.l,H-pad.b); chtx.lineTo(W-pad.r,H-pad.b); chtx.stroke();
+    if (!lossHistory.length) return;
+    const yMax=Math.max(0.02,...lossHistory)*1.05, n=lossHistory.length;
+    const xS=i=>pad.l+(W-pad.l-pad.r)*i/(Math.max(n-1,1));
+    const yS=v=>H-pad.b-(H-pad.t-pad.b)*(v/yMax);
+    chtx.strokeStyle='#0d9488'; chtx.lineWidth=2;
+    chtx.beginPath();
+    lossHistory.forEach((v,i)=>i===0?chtx.moveTo(xS(i),yS(v)):chtx.lineTo(xS(i),yS(v)));
+    chtx.stroke();
+    chtx.fillStyle='#6b7280'; chtx.font='11px system-ui';
+    chtx.fillText(yMax.toFixed(3),4,pad.t+8);
+    chtx.fillText('0',4,H-pad.b+4);
+    chtx.fillText(`step ${step}`,W-60,H-4);
+  }
+
+  // ── controls ──────────────────────────────────────────────────────────────
+  const startBtn=document.getElementById('rgStart'), pauseBtn=document.getElementById('rgPause'), resetBtn=document.getElementById('rgReset');
+  function loop() {
+    let mse;
+    for (let i=0; i<10; i++) mse=trainStep();
+    metricsEl.innerHTML=`<strong>Step:</strong> ${step} &nbsp; <strong>MSE:</strong> ${mse.toFixed(5)}`;
+    logEl.textContent=`Latest mini-batch loss: ${mse.toFixed(5)}`;
+    drawViz(); drawChart();
+    if (running) requestAnimationFrame(loop);
+  }
+  startBtn.addEventListener('click',()=>{
+    if(running)return; running=true;
+    startBtn.disabled=true; pauseBtn.disabled=false;
+    startBtn.textContent=step===0?'Training…':'Resume training';
+    loop();
+  });
+  pauseBtn.addEventListener('click',()=>{
+    running=false; startBtn.disabled=false; pauseBtn.disabled=true; startBtn.textContent='Resume training';
+  });
+  resetBtn.addEventListener('click',()=>{
+    running=false; step=0; lossHistory=[];
+    genData(); initNet();
+    startBtn.disabled=false; pauseBtn.disabled=true; startBtn.textContent='Start training';
+    metricsEl.innerHTML=''; logEl.textContent='';
+    drawViz(); drawChart();
+  });
+
+  genData(); initNet(); drawViz(); drawChart();
+})();
+</script>
+
+<style>
+.rg-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(320px,1fr)); gap:2rem; margin-top:1.5rem; }
+.rg-panel { border:1px solid #e2e8f0; border-radius:12px; padding:1.25rem; background:#fff; box-shadow:0 4px 12px rgba(15,23,42,.05); }
+.rg-panel header h2 { margin:0 0 .25rem; }
+.rg-panel header p  { margin:0 0 .5rem; color:#475569; }
+#rgViz,#rgChart { width:100%; border:1px solid #e2e8f0; border-radius:8px; background:#f8fafc; display:block; margin-top:.5rem; }
+.rg-controls { margin-top:.75rem; display:flex; gap:.5rem; flex-wrap:wrap; }
+.rg-controls button { border:none; border-radius:6px; padding:.5rem 1rem; font-size:.95rem; cursor:pointer; background:#1d4ed8; color:#fff; }
+.rg-controls button[disabled] { background:#94a3b8; cursor:not-allowed; }
+#rgPause { background:#0f766e; }
+#rgReset { background:#f97316; }
+.rg-metrics,.rg-log { margin-top:.75rem; font-size:.9rem; font-family:"IBM Plex Mono",SFMono-Regular,Menlo,monospace; color:#0f172a; }
+.rg-log { color:#475569; }
+@media(max-width:600px){.rg-controls{flex-direction:column;}}
+</style>

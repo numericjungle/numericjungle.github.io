@@ -1,0 +1,262 @@
+---
+layout: embed
+title: 2-D Classifier Lab
+permalink: /train-deep-learning/classify2d/
+---
+
+<p>
+  A neural network learns to separate two interleaved classes in 2-D space. The colored background shows the network's current decision boundary; training points are drawn on top.
+</p>
+
+<div class="cl-grid">
+  <section class="cl-panel">
+    <header>
+      <h2>Decision boundary</h2>
+      <p>Blue = class 0, red = class 1. Background updates every few steps as the boundary refines.</p>
+    </header>
+    <canvas id="clViz" width="400" height="400" aria-label="Decision boundary"></canvas>
+    <div class="cl-controls">
+      <button id="clStart">Start training</button>
+      <button id="clPause" disabled>Pause</button>
+      <button id="clReset">Reset</button>
+    </div>
+    <div class="cl-metrics" id="clMetrics" aria-live="polite"></div>
+  </section>
+  <section class="cl-panel">
+    <header>
+      <h2>Training accuracy</h2>
+      <p>Percentage of training points correctly classified. Cross-entropy loss drives the boundary to the right position.</p>
+    </header>
+    <canvas id="clChart" width="600" height="400" aria-label="Accuracy curve"></canvas>
+    <div class="cl-log" id="clLog"></div>
+  </section>
+</div>
+
+<script>
+(function () {
+  // ── micro-nn (same helpers across all demos) ──────────────────────────────
+  function randn() {
+    let u,v;
+    do{u=Math.random();}while(!u);
+    do{v=Math.random();}while(!v);
+    return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);
+  }
+  function mkLayer(inD,outD,act) {
+    const s=Math.sqrt(2/inD);
+    return { W:Array.from({length:inD*outD},()=>randn()*s), b:new Array(outD).fill(0),
+             mW:new Array(inD*outD).fill(0), vW:new Array(inD*outD).fill(0),
+             mb:new Array(outD).fill(0),     vb:new Array(outD).fill(0), inD,outD,act };
+  }
+  function actFn(z,type){ return type==='relu'?z.map(v=>Math.max(0,v)):z.slice(); }
+  function actGr(z,type){ return type==='relu'?z.map(v=>v>0?1:0):z.map(()=>1); }
+  function fwd(layers,x0){
+    const cache=[];let h=x0;
+    for(const L of layers){
+      const z=new Array(L.outD).fill(0);
+      for(let j=0;j<L.outD;j++){let s=L.b[j];for(let i=0;i<L.inD;i++)s+=h[i]*L.W[j*L.inD+i];z[j]=s;}
+      cache.push({h,z});h=actFn(z,L.act);
+    }
+    return{out:h,cache};
+  }
+  function bwd(layers,cache,dOut){
+    const grads=[];let dh=dOut;
+    for(let l=layers.length-1;l>=0;l--){
+      const L=layers[l],{h,z}=cache[l];
+      const dz=dh.map((d,i)=>d*actGr(z,L.act)[i]);
+      const dW=new Array(L.inD*L.outD).fill(0),dIn=new Array(L.inD).fill(0);
+      for(let j=0;j<L.outD;j++)for(let i=0;i<L.inD;i++){dW[j*L.inD+i]+=dz[j]*h[i];dIn[i]+=dz[j]*L.W[j*L.inD+i];}
+      grads.unshift({dW,db:dz.slice()});dh=dIn;
+    }
+    return grads;
+  }
+  function makeAdam(lr){
+    let t=0;
+    return function(layers,grads){
+      t++;const b1=0.9,b2=0.999,eps=1e-8;
+      for(let l=0;l<layers.length;l++){
+        const L=layers[l],g=grads[l];
+        for(let i=0;i<L.W.length;i++){L.mW[i]=b1*L.mW[i]+(1-b1)*g.dW[i];L.vW[i]=b2*L.vW[i]+(1-b2)*g.dW[i]**2;L.W[i]+=lr*(L.mW[i]/(1-b1**t))/(Math.sqrt(L.vW[i]/(1-b2**t))+eps);}
+        for(let i=0;i<L.b.length;i++){L.mb[i]=b1*L.mb[i]+(1-b1)*g.db[i];L.vb[i]=b2*L.vb[i]+(1-b2)*g.db[i]**2;L.b[i]+=lr*(L.mb[i]/(1-b1**t))/(Math.sqrt(L.vb[i]/(1-b2**t))+eps);}
+      }
+    };
+  }
+  function softmax(z){const m=Math.max(...z);const e=z.map(v=>Math.exp(v-m));const s=e.reduce((a,b)=>a+b,0);return e.map(v=>v/s);}
+
+  // ── moons dataset ─────────────────────────────────────────────────────────
+  let data=[];
+  function genData(){
+    data=[];
+    const n=50;
+    for(let i=0;i<n;i++){
+      const t=Math.PI*i/n;
+      data.push([Math.cos(t)+randn()*0.12, Math.sin(t)+randn()*0.12, 0]);
+    }
+    for(let i=0;i<n;i++){
+      const t=Math.PI*i/n;
+      data.push([1-Math.cos(t)+randn()*0.12, 0.5-Math.sin(t)+randn()*0.12, 1]);
+    }
+    // normalize to roughly [-0.2, 1.2] → [0.1, 0.9] for display
+  }
+
+  function scaleX(x){ return (x+0.2)/1.6; } // map raw x ≈[-0.2,1.4]→[0,1]
+  function scaleY(y){ return (y+0.4)/1.6; } // map raw y ≈[-0.9,0.9]→[0,1]
+
+  // ── network ───────────────────────────────────────────────────────────────
+  let layers,adam;
+  function initNet(){
+    layers=[mkLayer(2,20,'relu'),mkLayer(20,20,'relu'),mkLayer(20,2,'linear')];
+    adam=makeAdam(0.004);
+  }
+
+  // ── training ──────────────────────────────────────────────────────────────
+  let step=0,running=false,accHistory=[];
+  const batchSize=16;
+
+  function trainStep(){
+    const accG=layers.map(L=>({dW:new Array(L.inD*L.outD).fill(0),db:new Array(L.outD).fill(0)}));
+    let correct=0;
+    for(let k=0;k<batchSize;k++){
+      const d=data[Math.floor(Math.random()*data.length)];
+      const {out,cache}=fwd(layers,[scaleX(d[0]),scaleY(d[1])]);
+      const p=softmax(out);
+      const pred=p[0]>p[1]?0:1;
+      if(pred===d[2])correct++;
+      const dOut=p.slice();dOut[d[2]]-=1;
+      const grads=bwd(layers,cache,dOut.map(v=>v/batchSize));
+      for(let l=0;l<layers.length;l++){
+        for(let i=0;i<accG[l].dW.length;i++)accG[l].dW[i]+=grads[l].dW[i];
+        for(let i=0;i<accG[l].db.length;i++)accG[l].db[i]+=grads[l].db[i];
+      }
+    }
+    adam(layers,accG);step++;
+    const acc=correct/batchSize*100;
+    accHistory.push(acc);if(accHistory.length>300)accHistory.shift();
+    return acc;
+  }
+
+  function fullAccuracy(){
+    let c=0;
+    for(const d of data){
+      const{out}=fwd(layers,[scaleX(d[0]),scaleY(d[1])]);
+      const p=softmax(out);
+      if((p[0]>p[1]?0:1)===d[2])c++;
+    }
+    return(c/data.length*100).toFixed(1);
+  }
+
+  // ── drawing ───────────────────────────────────────────────────────────────
+  const vizC=document.getElementById('clViz'),ctx=vizC.getContext('2d');
+  const chtC=document.getElementById('clChart'),chtx=chtC.getContext('2d');
+  const metricsEl=document.getElementById('clMetrics'),logEl=document.getElementById('clLog');
+  let bgImageData=null;
+
+  function buildBackground(){
+    const W=vizC.width,H=vizC.height,res=40;
+    const img=ctx.createImageData(W,H);
+    for(let py=0;py<H;py++){
+      for(let px=0;px<W;px++){
+        const sx=px/W,sy=1-py/H;
+        // map [0,1]² back to raw coords
+        const rx=sx*1.6-0.2,ry=sy*1.6-0.4;
+        const{out}=fwd(layers,[scaleX(rx),scaleY(ry)]);
+        const p=softmax(out);
+        const idx=(py*W+px)*4;
+        // blue for class 0, red for class 1
+        img.data[idx]  =Math.round(180*p[1]+200*p[0]);
+        img.data[idx+1]=Math.round(200*p[0]+180*p[1]*(1-p[1]));
+        img.data[idx+2]=Math.round(240*p[0]+180*p[1]);
+        img.data[idx+3]=180;
+      }
+    }
+    bgImageData=img;
+  }
+
+  let bgStep=0;
+  function drawViz(){
+    const W=vizC.width,H=vizC.height;
+    ctx.clearRect(0,0,W,H);
+    ctx.fillStyle='#f8fafc';ctx.fillRect(0,0,W,H);
+
+    // background boundary (rebuilt every 8 train steps)
+    if(bgImageData) ctx.putImageData(bgImageData,0,0);
+
+    // data points
+    for(const [rx,ry,cls] of data){
+      const px=scaleX(rx)*W,py=(1-scaleY(ry))*H;
+      ctx.beginPath();ctx.arc(px,py,5,0,2*Math.PI);
+      ctx.fillStyle=cls===0?'#1d4ed8':'#dc2626';
+      ctx.fill();
+      ctx.strokeStyle='#fff';ctx.lineWidth=1.2;ctx.stroke();
+    }
+  }
+
+  function drawChart(){
+    const W=chtC.width,H=chtC.height,pad={l:44,r:12,t:12,b:28};
+    chtx.clearRect(0,0,W,H);chtx.fillStyle='#f8fafc';chtx.fillRect(0,0,W,H);
+    chtx.strokeStyle='#d0d7de';chtx.lineWidth=1;
+    chtx.beginPath();chtx.moveTo(pad.l,pad.t);chtx.lineTo(pad.l,H-pad.b);chtx.lineTo(W-pad.r,H-pad.b);chtx.stroke();
+    if(!accHistory.length)return;
+    const n=accHistory.length;
+    const xS=i=>pad.l+(W-pad.l-pad.r)*i/Math.max(n-1,1);
+    const yS=v=>H-pad.b-(H-pad.t-pad.b)*v/100;
+    // 100% line
+    chtx.strokeStyle='#e2e8f0';chtx.lineWidth=1;
+    chtx.beginPath();chtx.moveTo(pad.l,yS(100));chtx.lineTo(W-pad.r,yS(100));chtx.stroke();
+    // accuracy
+    chtx.strokeStyle='#7c3aed';chtx.lineWidth=2;
+    chtx.beginPath();
+    accHistory.forEach((v,i)=>i===0?chtx.moveTo(xS(i),yS(v)):chtx.lineTo(xS(i),yS(v)));
+    chtx.stroke();
+    chtx.fillStyle='#6b7280';chtx.font='11px system-ui';
+    chtx.fillText('100%',4,yS(100)+4);chtx.fillText('0%',4,H-pad.b+4);
+    chtx.fillText(`step ${step}`,W-60,H-4);
+  }
+
+  // ── controls ──────────────────────────────────────────────────────────────
+  const startBtn=document.getElementById('clStart'),pauseBtn=document.getElementById('clPause'),resetBtn=document.getElementById('clReset');
+  let frameCount=0;
+  function loop(){
+    let acc;
+    for(let i=0;i<8;i++) acc=trainStep();
+    frameCount++;
+    if(frameCount%3===0) buildBackground();
+    drawViz();drawChart();
+    const fa=fullAccuracy();
+    metricsEl.innerHTML=`<strong>Step:</strong> ${step} &nbsp; <strong>Train accuracy:</strong> ${fa}%`;
+    logEl.textContent=`Latest batch accuracy: ${acc.toFixed(0)}%`;
+    if(running)requestAnimationFrame(loop);
+  }
+  startBtn.addEventListener('click',()=>{
+    if(running)return;running=true;
+    startBtn.disabled=true;pauseBtn.disabled=false;
+    startBtn.textContent=step===0?'Training…':'Resume training';
+    loop();
+  });
+  pauseBtn.addEventListener('click',()=>{running=false;startBtn.disabled=false;pauseBtn.disabled=true;startBtn.textContent='Resume training';});
+  resetBtn.addEventListener('click',()=>{
+    running=false;step=0;accHistory=[];bgImageData=null;frameCount=0;
+    genData();initNet();
+    startBtn.disabled=false;pauseBtn.disabled=true;startBtn.textContent='Start training';
+    metricsEl.innerHTML='';logEl.textContent='';
+    drawViz();drawChart();
+  });
+
+  genData();initNet();drawViz();drawChart();
+})();
+</script>
+
+<style>
+.cl-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(320px,1fr)); gap:2rem; margin-top:1.5rem; }
+.cl-panel { border:1px solid #e2e8f0; border-radius:12px; padding:1.25rem; background:#fff; box-shadow:0 4px 12px rgba(15,23,42,.05); }
+.cl-panel header h2 { margin:0 0 .25rem; }
+.cl-panel header p  { margin:0 0 .5rem; color:#475569; }
+#clViz,#clChart { width:100%; border:1px solid #e2e8f0; border-radius:8px; background:#f8fafc; display:block; margin-top:.5rem; }
+.cl-controls { margin-top:.75rem; display:flex; gap:.5rem; flex-wrap:wrap; }
+.cl-controls button { border:none; border-radius:6px; padding:.5rem 1rem; font-size:.95rem; cursor:pointer; background:#1d4ed8; color:#fff; }
+.cl-controls button[disabled] { background:#94a3b8; cursor:not-allowed; }
+#clPause { background:#0f766e; }
+#clReset { background:#f97316; }
+.cl-metrics,.cl-log { margin-top:.75rem; font-size:.9rem; font-family:"IBM Plex Mono",SFMono-Regular,Menlo,monospace; color:#0f172a; }
+.cl-log { color:#475569; }
+@media(max-width:600px){.cl-controls{flex-direction:column;}}
+</style>

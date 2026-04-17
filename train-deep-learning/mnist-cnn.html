@@ -1,0 +1,319 @@
+---
+layout: embed
+title: MNIST CNN Lab
+permalink: /train-deep-learning/mnist-cnn/
+---
+
+<p>
+  A real convolutional network trains on synthetic 8×8 digit-like patterns. The Conv→ReLU→MaxPool→Dense pipeline runs entirely in the browser.
+</p>
+
+<div class="mn-grid">
+  <section class="mn-panel">
+    <header>
+      <h2>Predictions</h2>
+      <p>Each tile shows an input pattern with its true label (top-left) and predicted label (bottom-right). Green border = correct.</p>
+    </header>
+    <canvas id="mnViz" width="560" height="220" aria-label="Prediction grid"></canvas>
+    <div class="mn-controls">
+      <button id="mnStart">Start training</button>
+      <button id="mnPause" disabled>Pause</button>
+      <button id="mnReset">Reset</button>
+    </div>
+    <div class="mn-metrics" id="mnMetrics" aria-live="polite"></div>
+  </section>
+  <section class="mn-panel">
+    <header>
+      <h2>Training accuracy</h2>
+      <p>Network: Conv(3×3, 4 filters) → ReLU → MaxPool(2×2) → Dense(16) → Dense(4).</p>
+    </header>
+    <canvas id="mnChart" width="560" height="220" aria-label="Accuracy curve"></canvas>
+    <div class="mn-log" id="mnLog"></div>
+  </section>
+</div>
+
+<script>
+(function () {
+  const S = 8; // image size
+
+  // ── helpers ───────────────────────────────────────────────────────────────
+  function randn(){let u,v;do{u=Math.random();}while(!u);do{v=Math.random();}while(!v);return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);}
+  function relu(arr){return arr.map(v=>Math.max(0,v));}
+  function reluGrad(z){return z.map(v=>v>0?1:0);}
+  function softmax(z){const m=Math.max(...z);const e=z.map(v=>Math.exp(v-m));const s=e.reduce((a,b)=>a+b,0);return e.map(v=>v/s);}
+
+  // Dense layer helpers (same micro-nn pattern)
+  function mkDense(inD,outD,act){
+    const s=Math.sqrt(2/inD);
+    return{W:Array.from({length:inD*outD},()=>randn()*s),b:new Array(outD).fill(0),
+           mW:new Array(inD*outD).fill(0),vW:new Array(inD*outD).fill(0),
+           mb:new Array(outD).fill(0),   vb:new Array(outD).fill(0),inD,outD,act};
+  }
+  function denseActGr(z,act){return act==='relu'?z.map(v=>v>0?1:0):z.map(()=>1);}
+  function denseFwd(L,h){
+    const z=new Array(L.outD).fill(0);
+    for(let j=0;j<L.outD;j++){let s=L.b[j];for(let i=0;i<L.inD;i++)s+=h[i]*L.W[j*L.inD+i];z[j]=s;}
+    const a=L.act==='relu'?z.map(v=>Math.max(0,v)):z.slice();
+    return{z,a};
+  }
+  function denseBwd(L,h,z,dOut){
+    const ag=denseActGr(z,L.act);
+    const dz=dOut.map((d,i)=>d*ag[i]);
+    const dW=new Array(L.inD*L.outD).fill(0),dIn=new Array(L.inD).fill(0);
+    for(let j=0;j<L.outD;j++)for(let i=0;i<L.inD;i++){dW[j*L.inD+i]=dz[j]*h[i];dIn[i]+=dz[j]*L.W[j*L.inD+i];}
+    return{dW,db:dz.slice(),dIn};
+  }
+  function makeAdam(lr){
+    let t=0;
+    const upd=(L,dW,db)=>{
+      t++;const b1=0.9,b2=0.999,eps=1e-8;
+      for(let i=0;i<L.W.length;i++){L.mW[i]=b1*L.mW[i]+(1-b1)*dW[i];L.vW[i]=b2*L.vW[i]+(1-b2)*dW[i]**2;L.W[i]+=lr*(L.mW[i]/(1-b1**t))/(Math.sqrt(L.vW[i]/(1-b2**t))+eps);}
+      for(let i=0;i<L.b.length;i++){L.mb[i]=b1*L.mb[i]+(1-b1)*db[i];L.vb[i]=b2*L.vb[i]+(1-b2)*db[i]**2;L.b[i]+=lr*(L.mb[i]/(1-b1**t))/(Math.sqrt(L.vb[i]/(1-b2**t))+eps);}
+    };
+    // Don't increment t per-param; increment once per step
+    let step=0;
+    return function(items){step++;const b1=0.9,b2=0.999,eps=1e-8;for(const{L,dW,db}of items){for(let i=0;i<L.W.length;i++){L.mW[i]=b1*L.mW[i]+(1-b1)*dW[i];L.vW[i]=b2*L.vW[i]+(1-b2)*dW[i]**2;L.W[i]+=lr*(L.mW[i]/(1-b1**step))/(Math.sqrt(L.vW[i]/(1-b2**step))+eps);}for(let i=0;i<L.b.length;i++){L.mb[i]=b1*L.mb[i]+(1-b1)*db[i];L.vb[i]=b2*L.vb[i]+(1-b2)*db[i]**2;L.b[i]+=lr*(L.mb[i]/(1-b1**step))/(Math.sqrt(L.vb[i]/(1-b2**step))+eps);}}};
+  }
+
+  // ── Conv layer ────────────────────────────────────────────────────────────
+  // Input: S×S×1 (flat, channel-last), Output: (S-2)×(S-2)×nF
+  const nF=4, K=3;
+  function mkConv(){
+    const s=Math.sqrt(2/(K*K));
+    return{
+      W:Array.from({length:nF*K*K},()=>randn()*s),
+      b:new Array(nF).fill(0),
+      mW:new Array(nF*K*K).fill(0),vW:new Array(nF*K*K).fill(0),
+      mb:new Array(nF).fill(0),   vb:new Array(nF).fill(0)
+    };
+  }
+  const Ho=S-K+1, Wo=S-K+1; // 6×6
+  function convFwd(conv, input){
+    const out=new Float32Array(Ho*Wo*nF);
+    for(let oc=0;oc<nF;oc++){
+      for(let oh=0;oh<Ho;oh++){
+        for(let ow=0;ow<Wo;ow++){
+          let sum=conv.b[oc];
+          for(let kh=0;kh<K;kh++) for(let kw=0;kw<K;kw++)
+            sum+=input[(oh+kh)*S+(ow+kw)]*conv.W[(oc*K+kh)*K+kw];
+          out[(oh*Wo+ow)*nF+oc]=sum;
+        }
+      }
+    }
+    return out; // [Ho*Wo*nF] channel-last
+  }
+  function convBwd(conv, input, dOut){
+    const dInput=new Float32Array(S*S);
+    const dW=new Float32Array(nF*K*K);
+    const db=new Float32Array(nF);
+    for(let oc=0;oc<nF;oc++){
+      for(let oh=0;oh<Ho;oh++) for(let ow=0;ow<Wo;ow++){
+        const d=dOut[(oh*Wo+ow)*nF+oc];
+        db[oc]+=d;
+        for(let kh=0;kh<K;kh++) for(let kw=0;kw<K;kw++){
+          dW[(oc*K+kh)*K+kw]+=d*input[(oh+kh)*S+(ow+kw)];
+          dInput[(oh+kh)*S+(ow+kw)]+=d*conv.W[(oc*K+kh)*K+kw];
+        }
+      }
+    }
+    return{dInput,dW:Array.from(dW),db:Array.from(db)};
+  }
+
+  // MaxPool 2×2 → 3×3×4 = 36
+  const Ph=2,Pw=2, Hp=3,Wp=3;
+  function maxpoolFwd(x){
+    const out=new Float32Array(Hp*Wp*nF);
+    const idx=new Int32Array(Hp*Wp*nF);
+    for(let c=0;c<nF;c++) for(let oh=0;oh<Hp;oh++) for(let ow=0;ow<Wp;ow++){
+      let mx=-Infinity,mi=-1;
+      for(let kh=0;kh<Ph;kh++) for(let kw=0;kw<Pw;kw++){
+        const i=((oh*Ph+kh)*Wo+(ow*Pw+kw))*nF+c;
+        if(x[i]>mx){mx=x[i];mi=i;}
+      }
+      const oi=(oh*Wp+ow)*nF+c;out[oi]=mx;idx[oi]=mi;
+    }
+    return{out,idx};
+  }
+  function maxpoolBwd(dOut,idx){
+    const dX=new Float32Array(Ho*Wo*nF);
+    for(let i=0;i<dOut.length;i++) dX[idx[i]]+=dOut[i];
+    return dX;
+  }
+
+  // ── dataset ───────────────────────────────────────────────────────────────
+  const classNames=['H-bars','V-bars','Cross','Diag'];
+  const classColors=['#3b82f6','#f97316','#10b981','#8b5cf6'];
+  let dataset=[];
+  function makePattern(cls){
+    const img=new Float32Array(S*S);
+    if(cls===0){for(let r of[1,3,5])for(let c=0;c<S;c++)img[r*S+c]=1;}
+    else if(cls===1){for(let c of[1,3,5])for(let r=0;r<S;r++)img[r*S+c]=1;}
+    else if(cls===2){
+      for(let c=0;c<S;c++){img[3*S+c]=1;img[4*S+c]=1;}
+      for(let r=0;r<S;r++){img[r*S+3]=1;img[r*S+4]=1;}
+    } else {
+      for(let i=0;i<S;i++){img[i*S+i]=1;if(i<S-1)img[i*S+(i+1)]=1;}
+    }
+    return Array.from(img).map(v=>Math.min(1,Math.max(0,v+randn()*0.08)));
+  }
+  function genData(){
+    dataset=[];
+    for(let cls=0;cls<4;cls++) for(let v=0;v<15;v++) dataset.push({x:makePattern(cls),cls});
+  }
+
+  // ── network ───────────────────────────────────────────────────────────────
+  let conv,d1,d2,adam;
+  function initNet(){
+    conv=mkConv();
+    d1=mkDense(Hp*Wp*nF,16,'relu');
+    d2=mkDense(16,4,'linear');
+    adam=makeAdam(0.003);
+  }
+
+  function netFwd(x){
+    const cOut=convFwd(conv,x);
+    const cRelu=relu(Array.from(cOut));
+    const{out:pOut,idx:pIdx}=maxpoolFwd(new Float32Array(cRelu));
+    const flat=Array.from(pOut);
+    const{z:z1,a:a1}=denseFwd(d1,flat);
+    const{z:z2,a:a2}=denseFwd(d2,a1);
+    return{logits:a2,flat,a1,z1,cRelu,pOut:Array.from(pOut),pIdx,cOut:Array.from(cOut),input:x};
+  }
+
+  function netBwd(cache, yIdx){
+    const p=softmax(cache.logits);
+    const dLogits=p.map((v,i)=>v-(i===yIdx?1:0));
+    const bwd2=denseBwd(d2,cache.a1,cache.z2||cache.logits,dLogits);
+    // z2 is the pre-activation for d2 — we need to store it properly
+    // Actually d2 has act='linear', so z2===a2===logits; we stored logits
+    const bwd1=denseBwd(d1,cache.flat,cache.z1,bwd2.dIn);
+    const dPool=bwd1.dIn;
+    const dPostPool=maxpoolBwd(new Float32Array(dPool),cache.pIdx);
+    const dPreRelu=Array.from(dPostPool).map((d,i)=>d*(cache.cOut[i]>0?1:0));
+    const{dW:dcW,db:dcb}=convBwd(conv,cache.input,dPreRelu);
+    adam([
+      {L:conv,dW:dcW,db:dcb},
+      {L:d1,dW:bwd1.dW,db:bwd1.db},
+      {L:d2,dW:bwd2.dW,db:bwd2.db}
+    ]);
+  }
+
+  // ── training ──────────────────────────────────────────────────────────────
+  let step=0,running=false,accHistory=[];
+  function trainStep(){
+    let correct=0;
+    for(let k=0;k<16;k++){
+      const{x,cls}=dataset[Math.floor(Math.random()*dataset.length)];
+      const cache=netFwd(x);
+      const p=softmax(cache.logits);
+      if(p.indexOf(Math.max(...p))===cls)correct++;
+      netBwd(cache,cls);
+    }
+    step++;
+    const acc=correct/16*100;
+    accHistory.push(acc);if(accHistory.length>300)accHistory.shift();
+    return acc;
+  }
+  function fullAcc(){
+    let c=0;
+    for(const{x,cls}of dataset){const{logits}=netFwd(x);const p=softmax(logits);if(p.indexOf(Math.max(...p))===cls)c++;}
+    return(c/dataset.length*100).toFixed(1);
+  }
+
+  // ── drawing ───────────────────────────────────────────────────────────────
+  const vizC=document.getElementById('mnViz'),ctx=vizC.getContext('2d');
+  const chtC=document.getElementById('mnChart'),chtx=chtC.getContext('2d');
+  const metricsEl=document.getElementById('mnMetrics'),logEl=document.getElementById('mnLog');
+  const cell=6,pad2=4,ncols=8;
+
+  function drawViz(){
+    const W=vizC.width,H=vizC.height;
+    ctx.clearRect(0,0,W,H);ctx.fillStyle='#1e293b';ctx.fillRect(0,0,W,H);
+    const examples=[];
+    for(let cls=0;cls<4;cls++){
+      const ex=dataset.filter(d=>d.cls===cls).slice(0,2);
+      examples.push(...ex);
+    }
+    examples.slice(0,ncols).forEach(({x,cls},col)=>{
+      const x0=8+col*(S*cell+pad2);
+      const{logits}=netFwd(x);
+      const p=softmax(logits);
+      const pred=p.indexOf(Math.max(...p));
+      const correct=pred===cls;
+      for(let r=0;r<S;r++) for(let c2=0;c2<S;c2++){
+        const v=Math.round(x[r*S+c2]*255);
+        ctx.fillStyle=`rgb(${v},${v},${v})`;
+        ctx.fillRect(x0+c2*cell,30+r*cell,cell,cell);
+      }
+      ctx.strokeStyle=correct?'#22c55e':'#ef4444';
+      ctx.lineWidth=2;ctx.strokeRect(x0-1,29,S*cell+2,S*cell+2);
+      ctx.fillStyle=classColors[cls];ctx.font='bold 9px system-ui';
+      ctx.fillText(classNames[cls].slice(0,4),x0,22);
+      ctx.fillStyle=correct?'#22c55e':'#ef4444';
+      ctx.font='9px system-ui';
+      ctx.fillText(classNames[pred].slice(0,4),x0,29+S*cell+12);
+    });
+  }
+
+  function drawChart(){
+    const W=chtC.width,H=chtC.height,pad={l:44,r:12,t:12,b:28};
+    chtx.clearRect(0,0,W,H);chtx.fillStyle='#f8fafc';chtx.fillRect(0,0,W,H);
+    chtx.strokeStyle='#d0d7de';chtx.lineWidth=1;
+    chtx.beginPath();chtx.moveTo(pad.l,pad.t);chtx.lineTo(pad.l,H-pad.b);chtx.lineTo(W-pad.r,H-pad.b);chtx.stroke();
+    if(!accHistory.length)return;
+    const n=accHistory.length;
+    const xS=i=>pad.l+(W-pad.l-pad.r)*i/Math.max(n-1,1);
+    const yS=v=>H-pad.b-(H-pad.t-pad.b)*v/100;
+    chtx.strokeStyle='#e2e8f0';chtx.lineWidth=1;
+    chtx.beginPath();chtx.moveTo(pad.l,yS(100));chtx.lineTo(W-pad.r,yS(100));chtx.stroke();
+    chtx.strokeStyle='#1d4ed8';chtx.lineWidth=2;
+    chtx.beginPath();
+    accHistory.forEach((v,i)=>i===0?chtx.moveTo(xS(i),yS(v)):chtx.lineTo(xS(i),yS(v)));
+    chtx.stroke();
+    chtx.fillStyle='#6b7280';chtx.font='11px system-ui';
+    chtx.fillText('100%',4,yS(100)+4);chtx.fillText('0%',4,H-pad.b+4);
+    chtx.fillText(`step ${step}`,W-60,H-4);
+  }
+
+  // ── controls ──────────────────────────────────────────────────────────────
+  const startBtn=document.getElementById('mnStart'),pauseBtn=document.getElementById('mnPause'),resetBtn=document.getElementById('mnReset');
+  function loop(){
+    let acc;for(let i=0;i<5;i++)acc=trainStep();
+    drawViz();drawChart();
+    const fa=fullAcc();
+    metricsEl.innerHTML=`<strong>Step:</strong> ${step} &nbsp; <strong>Train accuracy:</strong> ${fa}%`;
+    logEl.textContent=`Batch accuracy: ${acc.toFixed(0)}% | Conv filters: ${nF} × ${K}×${K} → MaxPool → Dense(16) → Dense(4)`;
+    if(running)requestAnimationFrame(loop);
+  }
+  startBtn.addEventListener('click',()=>{
+    if(running)return;running=true;startBtn.disabled=true;pauseBtn.disabled=false;
+    startBtn.textContent=step===0?'Training…':'Resume training';loop();
+  });
+  pauseBtn.addEventListener('click',()=>{running=false;startBtn.disabled=false;pauseBtn.disabled=true;startBtn.textContent='Resume training';});
+  resetBtn.addEventListener('click',()=>{
+    running=false;step=0;accHistory=[];genData();initNet();
+    startBtn.disabled=false;pauseBtn.disabled=true;startBtn.textContent='Start training';
+    metricsEl.innerHTML='';logEl.textContent='';drawViz();drawChart();
+  });
+
+  genData();initNet();drawViz();drawChart();
+})();
+</script>
+
+<style>
+.mn-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(320px,1fr)); gap:2rem; margin-top:1.5rem; }
+.mn-panel { border:1px solid #e2e8f0; border-radius:12px; padding:1.25rem; background:#fff; box-shadow:0 4px 12px rgba(15,23,42,.05); }
+.mn-panel header h2 { margin:0 0 .25rem; }
+.mn-panel header p  { margin:0 0 .5rem; color:#475569; }
+#mnViz { background:#1e293b; }
+#mnViz,#mnChart { width:100%; border:1px solid #e2e8f0; border-radius:8px; display:block; margin-top:.5rem; }
+#mnChart { background:#f8fafc; }
+.mn-controls { margin-top:.75rem; display:flex; gap:.5rem; flex-wrap:wrap; }
+.mn-controls button { border:none; border-radius:6px; padding:.5rem 1rem; font-size:.95rem; cursor:pointer; background:#1d4ed8; color:#fff; }
+.mn-controls button[disabled] { background:#94a3b8; cursor:not-allowed; }
+#mnPause { background:#0f766e; }
+#mnReset { background:#f97316; }
+.mn-metrics,.mn-log { margin-top:.75rem; font-size:.9rem; font-family:"IBM Plex Mono",SFMono-Regular,Menlo,monospace; color:#0f172a; }
+.mn-log { color:#475569; font-size:.82rem; }
+@media(max-width:600px){.mn-controls{flex-direction:column;}}
+</style>

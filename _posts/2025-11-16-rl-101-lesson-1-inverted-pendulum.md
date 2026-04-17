@@ -1,9 +1,9 @@
 ---
 date: 2025-11-16 15:11:14.278892
 layout: post
-title: RL 101 - inverted pendulum
-description: "RL 101   lesson 1"
-tags: []
+title: "RL 101 - Lesson 9 - Inverted Pendulum"
+description: "RL 101 Lesson 9 - cart-pole reinforcement learning"
+tags: [reinforcement learning, deep learning]
 comments: true
 ---
 <!--excerpt-->

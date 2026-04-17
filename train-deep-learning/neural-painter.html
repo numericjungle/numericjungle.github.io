@@ -1,0 +1,277 @@
+---
+layout: embed
+title: Neural Painter
+permalink: /train-deep-learning/neural-painter/
+---
+
+<p>
+  A fully-connected network "paints" a target image by learning to map pixel coordinates (x, y) → RGB color. Low-frequency blobs appear first; fine detail fills in as training continues.
+</p>
+
+<div class="np-grid">
+  <section class="np-panel">
+    <header>
+      <h2>Target vs. painted</h2>
+      <p>Left: target. Right: current network output. Both update every frame.</p>
+    </header>
+    <canvas id="npViz" width="640" height="240" aria-label="Target and painting side by side"></canvas>
+    <div class="np-controls">
+      <button id="npStart">Start training</button>
+      <button id="npPause" disabled>Pause</button>
+      <button id="npReset">Reset</button>
+    </div>
+    <div class="np-metrics" id="npMetrics" aria-live="polite"></div>
+  </section>
+  <section class="np-panel">
+    <header>
+      <h2>Reconstruction loss</h2>
+      <p>Mean squared error between the target and the network's pixel predictions.</p>
+    </header>
+    <canvas id="npChart" width="640" height="240" aria-label="Loss curve"></canvas>
+    <div class="np-log" id="npLog"></div>
+  </section>
+</div>
+
+<script>
+(function () {
+  const IMG_W = 48, IMG_H = 48;
+
+  // ── micro-nn ──────────────────────────────────────────────────────────────
+  function randn(){let u,v;do{u=Math.random();}while(!u);do{v=Math.random();}while(!v);return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);}
+  function mkLayer(inD,outD,act){
+    const s=Math.sqrt(2/inD);
+    return{W:Array.from({length:inD*outD},()=>randn()*s),b:new Array(outD).fill(0),
+           mW:new Array(inD*outD).fill(0),vW:new Array(inD*outD).fill(0),
+           mb:new Array(outD).fill(0),   vb:new Array(outD).fill(0),inD,outD,act};
+  }
+  function actFn(z,t){
+    if(t==='relu')return z.map(v=>Math.max(0,v));
+    if(t==='tanh')return z.map(Math.tanh);
+    if(t==='sigmoid')return z.map(v=>1/(1+Math.exp(-Math.max(-20,Math.min(20,v)))));
+    return z.slice();
+  }
+  function actGr(z,t){
+    if(t==='relu')return z.map(v=>v>0?1:0);
+    if(t==='tanh')return z.map(v=>1-Math.tanh(v)**2);
+    if(t==='sigmoid')return z.map(v=>{const s=1/(1+Math.exp(-v));return s*(1-s);});
+    return z.map(()=>1);
+  }
+  function fwd(layers,x0){
+    const cache=[];let h=x0;
+    for(const L of layers){
+      const z=new Array(L.outD).fill(0);
+      for(let j=0;j<L.outD;j++){let s=L.b[j];for(let i=0;i<L.inD;i++)s+=h[i]*L.W[j*L.inD+i];z[j]=s;}
+      cache.push({h,z});h=actFn(z,L.act);
+    }
+    return{out:h,cache};
+  }
+  function bwd(layers,cache,dOut){
+    const grads=[];let dh=dOut;
+    for(let l=layers.length-1;l>=0;l--){
+      const L=layers[l],{h,z}=cache[l];
+      const dz=dh.map((d,i)=>d*actGr(z,L.act)[i]);
+      const dW=new Array(L.inD*L.outD).fill(0),dIn=new Array(L.inD).fill(0);
+      for(let j=0;j<L.outD;j++)for(let i=0;i<L.inD;i++){dW[j*L.inD+i]+=dz[j]*h[i];dIn[i]+=dz[j]*L.W[j*L.inD+i];}
+      grads.unshift({dW,db:dz.slice()});dh=dIn;
+    }
+    return grads;
+  }
+  function makeAdam(lr){
+    let t=0;
+    return function(layers,grads){
+      t++;const b1=0.9,b2=0.999,eps=1e-8;
+      for(let l=0;l<layers.length;l++){
+        const L=layers[l],g=grads[l];
+        for(let i=0;i<L.W.length;i++){L.mW[i]=b1*L.mW[i]+(1-b1)*g.dW[i];L.vW[i]=b2*L.vW[i]+(1-b2)*g.dW[i]**2;L.W[i]+=lr*(L.mW[i]/(1-b1**t))/(Math.sqrt(L.vW[i]/(1-b2**t))+eps);}
+        for(let i=0;i<L.b.length;i++){L.mb[i]=b1*L.mb[i]+(1-b1)*g.db[i];L.vb[i]=b2*L.vb[i]+(1-b2)*g.db[i]**2;L.b[i]+=lr*(L.mb[i]/(1-b1**t))/(Math.sqrt(L.vb[i]/(1-b2**t))+eps);}
+      }
+    };
+  }
+
+  // ── target image ──────────────────────────────────────────────────────────
+  // Pre-compute RGB target for each pixel
+  const target = new Float32Array(IMG_W * IMG_H * 3);
+  for (let py = 0; py < IMG_H; py++) {
+    for (let px = 0; px < IMG_W; px++) {
+      const x = px / (IMG_W - 1), y = py / (IMG_H - 1);
+      const dx = x - 0.5, dy = y - 0.5;
+      const r = Math.sqrt(dx*dx + dy*dy);
+      const angle = Math.atan2(dy, dx);
+      const phase = r * 8 * Math.PI;
+      const R = 0.5 + 0.5 * Math.sin(phase + angle * 2);
+      const G = 0.5 + 0.5 * Math.sin(phase + angle * 2 + 2.094);
+      const B = 0.5 + 0.5 * Math.sin(phase + angle * 2 + 4.189);
+      const idx = (py * IMG_W + px) * 3;
+      target[idx] = R; target[idx+1] = G; target[idx+2] = B;
+    }
+  }
+
+  // ── network ───────────────────────────────────────────────────────────────
+  let layers, adam;
+  function initNet(){
+    // Fourier-like lifting: encode (x,y) with sin/cos at several frequencies
+    // We use 8 frequency features: sin(2πkx), cos(2πkx), sin(2πky), cos(2πky) for k=1,2
+    // So input dim = 2 + 4*2 = 10
+    layers=[mkLayer(10,48,'tanh'),mkLayer(48,48,'tanh'),mkLayer(48,3,'sigmoid')];
+    adam=makeAdam(0.003);
+  }
+
+  function encode(x, y) {
+    const feats = [x, y];
+    for (let k = 1; k <= 4; k++) {
+      feats.push(Math.sin(2*Math.PI*k*x), Math.cos(2*Math.PI*k*x));
+    }
+    return feats; // length 10
+  }
+
+  // ── training ──────────────────────────────────────────────────────────────
+  let step = 0, running = false, lossHistory = [];
+  const batchSize = 256;
+
+  function trainStep() {
+    const accG = layers.map(L => ({dW: new Array(L.inD*L.outD).fill(0), db: new Array(L.outD).fill(0)}));
+    let totalLoss = 0;
+    for (let k = 0; k < batchSize; k++) {
+      const px = Math.floor(Math.random() * IMG_W);
+      const py = Math.floor(Math.random() * IMG_H);
+      const x = px/(IMG_W-1), y = py/(IMG_H-1);
+      const tidx = (py*IMG_W+px)*3;
+      const tRGB = [target[tidx], target[tidx+1], target[tidx+2]];
+      const input = encode(x, y);
+      const {out, cache} = fwd(layers, input);
+      let pixLoss = 0;
+      const dOut = out.map((v, i) => {
+        const err = v - tRGB[i]; pixLoss += err*err;
+        return 2*err/batchSize;
+      });
+      totalLoss += pixLoss/3;
+      const grads = bwd(layers, cache, dOut);
+      for (let l = 0; l < layers.length; l++) {
+        for (let i = 0; i < accG[l].dW.length; i++) accG[l].dW[i] += grads[l].dW[i];
+        for (let i = 0; i < accG[l].db.length; i++) accG[l].db[i] += grads[l].db[i];
+      }
+    }
+    adam(layers, accG);
+    step++;
+    const mse = totalLoss / batchSize;
+    lossHistory.push(mse); if (lossHistory.length > 300) lossHistory.shift();
+    return mse;
+  }
+
+  // ── drawing ───────────────────────────────────────────────────────────────
+  const vizC = document.getElementById('npViz'), ctx = vizC.getContext('2d');
+  const chtC = document.getElementById('npChart'), chtx = chtC.getContext('2d');
+  const metricsEl = document.getElementById('npMetrics'), logEl = document.getElementById('npLog');
+
+  // Offscreen canvases for target and output at IMG_W×IMG_H
+  const offTarget = document.createElement('canvas'); offTarget.width=IMG_W; offTarget.height=IMG_H;
+  const offOut    = document.createElement('canvas'); offOut.width=IMG_W; offOut.height=IMG_H;
+  const tCtx = offTarget.getContext('2d'), oCtx = offOut.getContext('2d');
+  const tImgData = tCtx.createImageData(IMG_W, IMG_H);
+  const oImgData = oCtx.createImageData(IMG_W, IMG_H);
+
+  // Draw target once
+  for (let i = 0; i < IMG_W*IMG_H; i++) {
+    tImgData.data[i*4]   = Math.round(target[i*3]*255);
+    tImgData.data[i*4+1] = Math.round(target[i*3+1]*255);
+    tImgData.data[i*4+2] = Math.round(target[i*3+2]*255);
+    tImgData.data[i*4+3] = 255;
+  }
+  tCtx.putImageData(tImgData, 0, 0);
+
+  function renderOutput() {
+    for (let py = 0; py < IMG_H; py++) {
+      for (let px = 0; px < IMG_W; px++) {
+        const x = px/(IMG_W-1), y = py/(IMG_H-1);
+        const {out} = fwd(layers, encode(x, y));
+        const i = py*IMG_W+px;
+        oImgData.data[i*4]   = Math.round(Math.max(0,Math.min(1,out[0]))*255);
+        oImgData.data[i*4+1] = Math.round(Math.max(0,Math.min(1,out[1]))*255);
+        oImgData.data[i*4+2] = Math.round(Math.max(0,Math.min(1,out[2]))*255);
+        oImgData.data[i*4+3] = 255;
+      }
+    }
+    oCtx.putImageData(oImgData, 0, 0);
+  }
+
+  let renderEvery = 3, frameCount = 0;
+  function drawViz() {
+    frameCount++;
+    if (frameCount % renderEvery === 0) renderOutput();
+    const W = vizC.width, H = vizC.height;
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = '#f8fafc'; ctx.fillRect(0, 0, W, H);
+    const imgW = Math.floor(W/2) - 12, imgH = H - 20;
+    // Draw target (left)
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(offTarget, 8, 10, imgW, imgH);
+    ctx.drawImage(offOut, W/2+4, 10, imgW, imgH);
+    // Labels
+    ctx.fillStyle = '#374151'; ctx.font = 'bold 12px system-ui';
+    ctx.fillText('Target', 8, H-2);
+    ctx.fillText('Network output', W/2+4, H-2);
+    // Borders
+    ctx.strokeStyle = '#e2e8f0'; ctx.lineWidth = 1;
+    ctx.strokeRect(8, 10, imgW, imgH);
+    ctx.strokeRect(W/2+4, 10, imgW, imgH);
+  }
+
+  function drawChart() {
+    const W=chtC.width,H=chtC.height,pad={l:44,r:12,t:12,b:28};
+    chtx.clearRect(0,0,W,H); chtx.fillStyle='#f8fafc'; chtx.fillRect(0,0,W,H);
+    chtx.strokeStyle='#d0d7de'; chtx.lineWidth=1;
+    chtx.beginPath(); chtx.moveTo(pad.l,pad.t); chtx.lineTo(pad.l,H-pad.b); chtx.lineTo(W-pad.r,H-pad.b); chtx.stroke();
+    if (!lossHistory.length) return;
+    const yMax=Math.max(0.01,...lossHistory)*1.05, n=lossHistory.length;
+    const xS=i=>pad.l+(W-pad.l-pad.r)*i/Math.max(n-1,1);
+    const yS=v=>H-pad.b-(H-pad.t-pad.b)*(v/yMax);
+    chtx.strokeStyle='#8b5cf6'; chtx.lineWidth=2;
+    chtx.beginPath();
+    lossHistory.forEach((v,i)=>i===0?chtx.moveTo(xS(i),yS(v)):chtx.lineTo(xS(i),yS(v)));
+    chtx.stroke();
+    chtx.fillStyle='#6b7280'; chtx.font='11px system-ui';
+    chtx.fillText(yMax.toFixed(4),4,pad.t+8); chtx.fillText('0',4,H-pad.b+4);
+    chtx.fillText(`step ${step}`,W-60,H-4);
+  }
+
+  // ── controls ──────────────────────────────────────────────────────────────
+  const startBtn=document.getElementById('npStart'),pauseBtn=document.getElementById('npPause'),resetBtn=document.getElementById('npReset');
+  function loop() {
+    let mse;
+    for (let i=0;i<5;i++) mse=trainStep();
+    drawViz(); drawChart();
+    metricsEl.innerHTML=`<strong>Step:</strong> ${step} &nbsp; <strong>MSE:</strong> ${mse.toFixed(5)}`;
+    logEl.textContent=`Pixel MSE: ${mse.toFixed(5)} — low-frequency color fills in first, edges follow`;
+    if (running) requestAnimationFrame(loop);
+  }
+  startBtn.addEventListener('click',()=>{
+    if(running)return; running=true; startBtn.disabled=true; pauseBtn.disabled=false;
+    startBtn.textContent=step===0?'Training…':'Resume training'; loop();
+  });
+  pauseBtn.addEventListener('click',()=>{running=false;startBtn.disabled=false;pauseBtn.disabled=true;startBtn.textContent='Resume training';});
+  resetBtn.addEventListener('click',()=>{
+    running=false;step=0;lossHistory=[];frameCount=0;
+    initNet();startBtn.disabled=false;pauseBtn.disabled=true;startBtn.textContent='Start training';
+    metricsEl.innerHTML='';logEl.textContent='';
+    drawViz();drawChart();
+  });
+
+  initNet(); drawViz(); drawChart();
+})();
+</script>
+
+<style>
+.np-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(320px,1fr)); gap:2rem; margin-top:1.5rem; }
+.np-panel { border:1px solid #e2e8f0; border-radius:12px; padding:1.25rem; background:#fff; box-shadow:0 4px 12px rgba(15,23,42,.05); }
+.np-panel header h2 { margin:0 0 .25rem; }
+.np-panel header p  { margin:0 0 .5rem; color:#475569; }
+#npViz,#npChart { width:100%; border:1px solid #e2e8f0; border-radius:8px; background:#f8fafc; display:block; margin-top:.5rem; }
+.np-controls { margin-top:.75rem; display:flex; gap:.5rem; flex-wrap:wrap; }
+.np-controls button { border:none; border-radius:6px; padding:.5rem 1rem; font-size:.95rem; cursor:pointer; background:#1d4ed8; color:#fff; }
+.np-controls button[disabled] { background:#94a3b8; cursor:not-allowed; }
+#npPause { background:#0f766e; }
+#npReset { background:#f97316; }
+.np-metrics,.np-log { margin-top:.75rem; font-size:.9rem; font-family:"IBM Plex Mono",SFMono-Regular,Menlo,monospace; color:#0f172a; }
+.np-log { color:#475569; }
+@media(max-width:600px){.np-controls{flex-direction:column;}}
+</style>
