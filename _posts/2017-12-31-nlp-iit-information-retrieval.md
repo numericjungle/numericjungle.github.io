@@ -3,7 +3,7 @@ date: 2017-12-31 15:01:47.157476
 layout: post
 title: NLP IIT information retrieval
 description: "NLP IIT information retrieval"
-tags: [NLP, information retrieval, machine learning]
+tags: [natural language processing, machine learning]
 comments: true
 ---
 

@@ -3,7 +3,7 @@ date: 2019-02-10 15:34:48.841265
 layout: post
 title: Period 3 implies chaos
 description: 
-tags: []
+tags: [mathematics, physics]
 comments: true
 ---
 ![64582](https://user-images.githubusercontent.com/5177427/52541561-5eee8d80-2d4b-11e9-822d-dcca55eeb36e.jpg)

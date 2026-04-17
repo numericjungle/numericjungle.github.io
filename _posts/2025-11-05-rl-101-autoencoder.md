@@ -3,7 +3,7 @@ date: 2025-11-05 09:00:00.000000
 layout: post
 title: "RL 101 - Lesson 6 - Autoencoders & Latent Space"
 description: "RL 101 Lesson 6 - autoencoders, compression, and latent space visualization"
-tags: [deep learning, machine learning]
+tags: [deep learning, machine learning, representation learning]
 comments: true
 ---
 What if we could learn a compact description of data with no labels at all? Autoencoders do exactly that: an encoder compresses input to a tiny bottleneck, and a decoder reconstructs the original from that bottleneck alone.

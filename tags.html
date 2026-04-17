@@ -4,25 +4,53 @@ title: Tags
 description: "An archive of posts sorted by tag."
 ---
 
-{% capture site_tags %}{% for tag in site.tags %}{{ tag | first }}{% unless forloop.last %},{% endunless %}{% endfor %}{% endcapture %}
-<!-- site_tags: {{ site_tags }} -->
-{% assign tag_words = site_tags | split:',' | sort %}
-<!-- tag_words: {{ tag_words }} -->
+{% assign tag_groups = site.data.tag_groups %}
+
+<nav class="tag-toc">
+{% for group in tag_groups %}
+  {% assign has_any = false %}
+  {% for tag in group.tags %}{% if site.tags[tag] %}{% assign has_any = true %}{% endif %}{% endfor %}
+  {% if has_any %}
+  <span class="tag-group-label">{{ group.name }}:</span>
+  {% for tag in group.tags %}
+    {% if site.tags[tag] %}
+    <a href="#{{ tag | cgi_escape }}" class="tag-pill">{{ tag }} <span>{{ site.tags[tag] | size }}</span></a>
+    {% endif %}
+  {% endfor %}
+  <br>
+  {% endif %}
+{% endfor %}
+</nav>
 
 <div id="tags">
-  <ul class="tag-box inline">
-  {% for tag in tag_words %}
-    <li><a href="#{{ tag | cgi_escape }}">{{ tag }} <span>{{ site.tags[tag] | size }}</span></a></li>
+{% for group in tag_groups %}
+  {% assign has_any = false %}
+  {% for tag in group.tags %}{% if site.tags[tag] %}{% assign has_any = true %}{% endif %}{% endfor %}
+  {% if has_any %}
+  <h2 class="tag-group-heading">{{ group.name }}</h2>
+  {% for tag in group.tags %}
+    {% if site.tags[tag] %}
+    <h3 id="{{ tag | cgi_escape }}">{{ tag }} <small>({{ site.tags[tag] | size }})</small></h3>
+    <ul class="posts">
+      {% assign sorted_posts = site.tags[tag] | sort: "date" | reverse %}
+      {% for post in sorted_posts %}{% if post.title != null %}
+      <li itemscope>
+        <span class="entry-date"><time datetime="{{ post.date | date_to_xmlschema }}" itemprop="datePublished">{{ post.date | date: "%B %d, %Y" }}</time></span>
+        &raquo; <a href="{{ post.url }}">{{ post.title }}</a>
+      </li>
+      {% endif %}{% endfor %}
+    </ul>
+    {% endif %}
   {% endfor %}
-  </ul>
-
-  {% for item in (0..site.tags.size) %}{% unless forloop.last %}
-    {% capture this_word %}{{ tag_words[item] | strip_newlines }}{% endcapture %}
-  <h2 id="{{ this_word | cgi_escape }}">{{ this_word }}</h2>
-  <ul class="posts">
-    {% for post in site.tags[this_word] %}{% if post.title != null %}
-    <li itemscope><span class="entry-date"><time datetime="{{ post.date | date_to_xmlschema }}" itemprop="datePublished">{{ post.date | date: "%B %d, %Y" }}</time></span> &raquo; {% if post.category == "speaking" %}<i class="fa fa-microphone"></i> {% endif %}<a href="{{ post.url }}">{{ post.title }}</a></li>
-    {% endif %}{% endfor %}
-  </ul>
-  {% endunless %}{% endfor %}
+  {% endif %}
+{% endfor %}
 </div>
+
+<style>
+.tag-toc { margin-bottom: 2rem; line-height: 2.4; }
+.tag-group-label { font-weight: 600; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em; opacity: 0.6; margin-right: 0.25rem; }
+.tag-pill { display: inline-block; padding: 0.15rem 0.55rem; margin: 0.15rem 0.2rem; border: 1px solid currentColor; border-radius: 999px; font-size: 0.8rem; text-decoration: none; opacity: 0.75; }
+.tag-pill:hover { opacity: 1; }
+.tag-pill span { font-size: 0.7rem; opacity: 0.7; }
+.tag-group-heading { margin-top: 2rem; padding-bottom: 0.3rem; border-bottom: 2px solid currentColor; opacity: 0.85; }
+</style>

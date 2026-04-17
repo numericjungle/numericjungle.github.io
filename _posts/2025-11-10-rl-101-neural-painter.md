@@ -3,7 +3,7 @@ date: 2025-11-10 09:00:00.000000
 layout: post
 title: "RL 101 - Lesson 7 - Neural Painter"
 description: "RL 101 Lesson 7 - implicit neural representation and Fourier feature encoding"
-tags: [deep learning, machine learning]
+tags: [deep learning, machine learning, representation learning]
 comments: true
 ---
 What if a neural network *was* the image? Instead of classifying or compressing pictures, we train a network $f_\theta(x, y) \to (R, G, B)$ that maps pixel coordinates directly to colors. This is called an **implicit neural representation**.

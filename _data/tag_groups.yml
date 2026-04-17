@@ -1,0 +1,45 @@
+- name: Reinforcement Learning
+  tags:
+    - reinforcement learning
+
+- name: Deep Learning
+  tags:
+    - deep learning
+    - computer vision
+    - representation learning
+    - transfer learning
+    - natural language processing
+
+- name: Machine Learning
+  tags:
+    - machine learning
+    - data science
+    - data visualization
+
+- name: Programming
+  tags:
+    - python
+    - javascript
+    - code
+    - frontend
+
+- name: Tools & Systems
+  tags:
+    - linux
+    - installation
+    - software
+    - mac
+    - chrome extension
+    - spark
+
+- name: Misc
+  tags:
+    - mathematics
+    - physics
+    - book
+    - podcast
+    - hackathon
+    - awards
+    - management
+    - spiritual
+    - slides
