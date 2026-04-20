@@ -1,0 +1,211 @@
+---
+layout: embed
+title: CV Lab 4 - Color Clustering
+permalink: /train-deep-learning/cv-color-cluster/
+---
+
+<p class="cvc-intro">K-means groups all pixels into k colour clusters, then replaces every pixel with its cluster's mean colour. Drag the slider to change k and see the trade-off between compression and fidelity.</p>
+
+<div id="cvc">
+
+  <div class="cvc-bar">
+    <label>k = <strong id="cvcKLabel">6</strong> colours</label>
+    <input type="range" id="cvcK" min="2" max="16" value="6" step="1">
+    <button id="cvcRun">Run k-means</button>
+    <button id="cvcGen">New image</button>
+    <span id="cvcStatus" class="cvc-status"></span>
+  </div>
+
+  <div class="cvc-panels">
+    <section class="cvc-card">
+      <h3>Original</h3>
+      <canvas id="cvcOrig" width="240" height="240"></canvas>
+    </section>
+    <section class="cvc-card">
+      <h3>Quantised (<span id="cvcColorsLabel">6</span> colours)</h3>
+      <canvas id="cvcQuant" width="240" height="240"></canvas>
+    </section>
+    <section class="cvc-card cvc-palette-card">
+      <h3>Colour palette</h3>
+      <div id="cvcPalette" class="cvc-palette"></div>
+    </section>
+  </div>
+
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  var W = 240, H = 240;
+  var origCv = document.getElementById('cvcOrig');
+  var quantCv = document.getElementById('cvcQuant');
+  var origCtx = origCv.getContext('2d');
+  var quantCtx = quantCv.getContext('2d');
+  var kSlider = document.getElementById('cvcK');
+  var kLabel = document.getElementById('cvcKLabel');
+  var colorsLabel = document.getElementById('cvcColorsLabel');
+  var status = document.getElementById('cvcStatus');
+
+  /* ── generate a colourful test image ── */
+  function generateImage() {
+    var grd = origCtx.createRadialGradient(120, 80, 10, 120, 80, 160);
+    grd.addColorStop(0, '#f59e0b');
+    grd.addColorStop(0.4, '#ef4444');
+    grd.addColorStop(0.8, '#8b5cf6');
+    grd.addColorStop(1, '#0ea5e9');
+    origCtx.fillStyle = grd;
+    origCtx.fillRect(0, 0, W, H);
+
+    var shapes = [
+      {type:'circle', x:60,  y:60,  r:45,  color:'#34d399'},
+      {type:'circle', x:190, y:50,  r:35,  color:'#f472b6'},
+      {type:'rect',   x:30,  y:160, w:80,  h:60, color:'#60a5fa'},
+      {type:'rect',   x:150, y:140, w:70,  h:80, color:'#fbbf24'},
+      {type:'circle', x:120, y:200, r:28,  color:'#fb7185'},
+    ];
+    shapes.forEach(function (s) {
+      origCtx.fillStyle = s.color;
+      origCtx.globalAlpha = 0.82;
+      origCtx.beginPath();
+      if (s.type === 'circle') {
+        origCtx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+      } else {
+        origCtx.rect(s.x, s.y, s.w, s.h);
+      }
+      origCtx.fill();
+    });
+    origCtx.globalAlpha = 1;
+
+    /* scanline texture */
+    for (var y = 0; y < H; y += 4) {
+      origCtx.fillStyle = 'rgba(0,0,0,0.06)';
+      origCtx.fillRect(0, y, W, 1);
+    }
+  }
+
+  /* ── k-means ── */
+  function distSq(a, b) {
+    var dr = a[0]-b[0], dg = a[1]-b[1], db = a[2]-b[2];
+    return dr*dr + dg*dg + db*db;
+  }
+
+  function kmeans(pixels, k, maxIter) {
+    /* init centroids from random distinct pixels */
+    var centroids = [], indices = [];
+    var tried = {};
+    while (centroids.length < k) {
+      var ri = Math.floor(Math.random() * pixels.length);
+      if (!tried[ri]) { tried[ri] = true; centroids.push(pixels[ri].slice()); }
+    }
+
+    var assignments = new Int32Array(pixels.length);
+
+    for (var iter = 0; iter < maxIter; iter++) {
+      var changed = false;
+      /* assign */
+      for (var pi = 0; pi < pixels.length; pi++) {
+        var best = 0, bestD = distSq(pixels[pi], centroids[0]);
+        for (var ci = 1; ci < k; ci++) {
+          var d = distSq(pixels[pi], centroids[ci]);
+          if (d < bestD) { bestD = d; best = ci; }
+        }
+        if (assignments[pi] !== best) { assignments[pi] = best; changed = true; }
+      }
+      if (!changed && iter > 0) break;
+
+      /* update */
+      var sums = [];
+      for (var j = 0; j < k; j++) sums.push([0, 0, 0, 0]);
+      for (var pi2 = 0; pi2 < pixels.length; pi2++) {
+        var a = assignments[pi2];
+        sums[a][0] += pixels[pi2][0]; sums[a][1] += pixels[pi2][1];
+        sums[a][2] += pixels[pi2][2]; sums[a][3]++;
+      }
+      for (var j2 = 0; j2 < k; j2++) {
+        var n = sums[j2][3];
+        if (n > 0) {
+          centroids[j2] = [sums[j2][0]/n, sums[j2][1]/n, sums[j2][2]/n];
+        }
+      }
+    }
+    return { centroids: centroids, assignments: assignments };
+  }
+
+  function runKmeans() {
+    var k = +kSlider.value;
+    colorsLabel.textContent = k;
+    status.textContent = 'Running\u2026';
+
+    setTimeout(function () {
+      var imgd = origCtx.getImageData(0, 0, W, H);
+      var s = imgd.data;
+      var pixels = [];
+      for (var i = 0; i < s.length; i += 4) {
+        pixels.push([s[i], s[i+1], s[i+2]]);
+      }
+
+      var result = kmeans(pixels, k, 20);
+      var centroids = result.centroids;
+      var assignments = result.assignments;
+
+      /* render quantised image */
+      var out = quantCtx.createImageData(W, H);
+      var d = out.data;
+      for (var pi = 0; pi < pixels.length; pi++) {
+        var c = centroids[assignments[pi]];
+        var oi = pi * 4;
+        d[oi] = Math.round(c[0]); d[oi+1] = Math.round(c[1]); d[oi+2] = Math.round(c[2]); d[oi+3] = 255;
+      }
+      quantCtx.putImageData(out, 0, 0);
+
+      /* render palette */
+      var sorted = centroids.slice().sort(function (a, b) {
+        return (b[0]*0.299 + b[1]*0.587 + b[2]*0.114) - (a[0]*0.299 + a[1]*0.587 + a[2]*0.114);
+      });
+      var pal = document.getElementById('cvcPalette');
+      pal.innerHTML = '';
+      sorted.forEach(function (c) {
+        var sw = document.createElement('div');
+        sw.className = 'cvc-swatch';
+        sw.style.background = 'rgb(' + Math.round(c[0]) + ',' + Math.round(c[1]) + ',' + Math.round(c[2]) + ')';
+        var lbl = document.createElement('span');
+        var hex = '#' + [c[0], c[1], c[2]].map(function (v) {
+          return ('0' + Math.round(v).toString(16)).slice(-2);
+        }).join('');
+        lbl.textContent = hex;
+        sw.appendChild(lbl);
+        pal.appendChild(sw);
+      });
+
+      status.textContent = 'Done';
+      setTimeout(function () { status.textContent = ''; }, 1200);
+    }, 0);
+  }
+
+  kSlider.addEventListener('input', function () { kLabel.textContent = kSlider.value; });
+  document.getElementById('cvcRun').addEventListener('click', runKmeans);
+  document.getElementById('cvcGen').addEventListener('click', function () { generateImage(); runKmeans(); });
+
+  generateImage();
+  runKmeans();
+}());
+</script>
+
+<style>
+.cvc-intro { font-size:.92rem; opacity:.8; margin-bottom:1rem; }
+.cvc-bar { display:flex; align-items:center; gap:.6rem; flex-wrap:wrap; margin-bottom:1rem; }
+.cvc-bar label { font-size:.88rem; }
+.cvc-bar input[type=range] { width:120px; }
+.cvc-bar button { padding:.3rem .65rem; border:1px solid #cbd5e1; border-radius:6px; background:#fff; font-size:.85rem; cursor:pointer; }
+.cvc-bar button:hover { background:#f1f5f9; }
+.cvc-status { font-size:.8rem; color:#64748b; }
+.cvc-panels { display:flex; gap:.75rem; flex-wrap:wrap; }
+.cvc-card { border:1px solid #e2e8f0; border-radius:10px; padding:.8rem; }
+.cvc-card h3 { margin:0 0 .5rem; font-size:.88rem; }
+.cvc-card canvas { display:block; border-radius:4px; }
+.cvc-palette-card { min-width:120px; flex:1; }
+.cvc-palette { display:flex; flex-direction:column; gap:4px; }
+.cvc-swatch { display:flex; align-items:center; border-radius:5px; padding:6px 8px; position:relative; }
+.cvc-swatch span { font-size:.7rem; font-family:monospace; mix-blend-mode:difference; color:#fff; }
+</style>

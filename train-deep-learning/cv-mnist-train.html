@@ -1,0 +1,293 @@
+---
+layout: embed
+title: CV Lab 2 - MNIST Digit Classifier
+permalink: /train-deep-learning/cv-mnist-train/
+---
+
+<script src="/convnetjs/build/convnet.js"></script>
+<script src="/convnetjs/demo/mnist/mnist_labels.js"></script>
+
+<p class="cvm-intro">A two-layer CNN trains on 60 000 real MNIST digits — entirely in your browser. Watch the loss fall and accuracy climb as the network learns to tell 0 from 9.</p>
+
+<div id="cvm">
+
+  <div class="cvm-bar">
+    <button id="cvmStart" disabled>&#9654; Start</button>
+    <button id="cvmPause" disabled>&#9646;&#9646; Pause</button>
+    <button id="cvmReset">&#8635; Reset</button>
+    <span id="cvmStatus" class="cvm-status">Loading MNIST data&hellip;</span>
+  </div>
+
+  <div class="cvm-top">
+    <section class="cvm-card">
+      <h3>Training loss</h3>
+      <canvas id="cvmLoss" width="320" height="160"></canvas>
+    </section>
+    <section class="cvm-card">
+      <h3>Test accuracy</h3>
+      <canvas id="cvmAcc" width="320" height="160"></canvas>
+    </section>
+  </div>
+
+  <section class="cvm-card">
+    <h3>Sample predictions &mdash; <small>updated every 400 steps</small></h3>
+    <div id="cvmGrid" class="cvm-pred-grid"></div>
+  </section>
+
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  var DIM = 28, CROP = 24, WPIX = DIM * DIM;
+  var SPB = 3000;            /* samples per batch */
+  var TRAIN_B = 20, TEST_B = 20;
+
+  var net, trainer;
+  var running = false, step = 0;
+  var sLoss = -1, lossHist = [], accHist = [];
+  var correct = 0, total = 0;
+  var imgData = [];
+  var loaded = [];
+  var rafId = null;
+
+  function $id(id) { return document.getElementById(id); }
+
+  /* ── network ── */
+  function buildNet() {
+    var d = [
+      {type:'input',   out_sx:CROP, out_sy:CROP, out_depth:1},
+      {type:'conv',    sx:5, filters:8,  stride:1, pad:2, activation:'relu'},
+      {type:'pool',    sx:2, stride:2},
+      {type:'conv',    sx:5, filters:16, stride:1, pad:2, activation:'relu'},
+      {type:'pool',    sx:3, stride:3},
+      {type:'softmax', num_classes:10}
+    ];
+    net = new convnetjs.Net();
+    net.makeLayers(d);
+    trainer = new convnetjs.SGDTrainer(net, {method:'adadelta', batch_size:20, l2_decay:0.001});
+  }
+
+  /* ── data ── */
+  function loadBatch(n) {
+    var img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = function () {
+      var c = document.createElement('canvas');
+      c.width = img.width; c.height = img.height;
+      var ctx = c.getContext('2d');
+      ctx.drawImage(img, 0, 0);
+      imgData[n] = ctx.getImageData(0, 0, c.width, c.height);
+      loaded[n] = true;
+
+      /* check if we have enough to start */
+      var trainReady = loaded[0] && loaded[1];
+      var testReady  = loaded[TEST_B];
+      if (trainReady && testReady) {
+        $id('cvmStatus').textContent = 'Ready — click Start';
+        $id('cvmStart').disabled = false;
+        renderGrid();
+      }
+    };
+    img.src = '/convnetjs/demo/mnist/mnist_batch_' + n + '.png';
+  }
+
+  function getVol(batchIdx, k, augment) {
+    var p = imgData[batchIdx].data;
+    var vol = new convnetjs.Vol(DIM, DIM, 1, 0.0);
+    var i = 0;
+    for (var xc = 0; xc < DIM; xc++) {
+      for (var yc = 0; yc < DIM; yc++) {
+        vol.set(yc, xc, 0, p[((WPIX * k) + i) * 4 + 0] / 255.0 - 0.5);
+        i++;
+      }
+    }
+    if (augment) {
+      var dx = Math.floor(Math.random() * (DIM - CROP + 1));
+      var dy = Math.floor(Math.random() * (DIM - CROP + 1));
+      vol = convnetjs.augment(vol, CROP, dx, dy, false);
+    } else {
+      vol = convnetjs.augment(vol, CROP, 2, 2, false);
+    }
+    return vol;
+  }
+
+  /* ── training ── */
+  function trainFrame() {
+    if (!running) return;
+    for (var i = 0; i < 8; i++) {
+      var b   = Math.floor(Math.random() * TRAIN_B);
+      if (!loaded[b]) continue;
+      var k   = Math.floor(Math.random() * SPB);
+      var lbl = labels[b * SPB + k];
+      var x   = getVol(b, k, true);
+      var inf = trainer.train(x, lbl);
+      sLoss = sLoss < 0 ? inf.loss : 0.99 * sLoss + 0.01 * inf.loss;
+      if (net.getPrediction() === lbl) correct++;
+      total++; step++;
+    }
+    if (step % 20  === 0) drawLoss();
+    if (step % 100 === 0) updateStats();
+    if (step % 400 === 0) { evalTest(); renderGrid(); }
+    rafId = requestAnimationFrame(trainFrame);
+  }
+
+  /* ── evaluation ── */
+  function evalTest() {
+    if (!loaded[TEST_B]) return;
+    var N = 500, ok = 0;
+    for (var i = 0; i < N; i++) {
+      var k = Math.floor(Math.random() * SPB);
+      var x = getVol(TEST_B, k, false);
+      net.forward(x);
+      if (net.getPrediction() === labels[TEST_B * SPB + k]) ok++;
+    }
+    var acc = ok / N;
+    accHist.push(acc);
+    drawAcc();
+  }
+
+  /* ── render helpers ── */
+  function renderDigitCanvas(canvas, batchIdx, k) {
+    canvas.width = DIM; canvas.height = DIM;
+    var ctx = canvas.getContext('2d');
+    var p = imgData[batchIdx].data;
+    var imgd = ctx.createImageData(DIM, DIM);
+    for (var xc = 0; xc < DIM; xc++) {
+      for (var yc = 0; yc < DIM; yc++) {
+        var i = xc * DIM + yc;
+        var v = p[((WPIX * k) + i) * 4 + 0];
+        var pi = (yc * DIM + xc) * 4;
+        imgd.data[pi] = imgd.data[pi+1] = imgd.data[pi+2] = v;
+        imgd.data[pi+3] = 255;
+      }
+    }
+    ctx.putImageData(imgd, 0, 0);
+  }
+
+  function renderGrid() {
+    if (!loaded[TEST_B] || !net) return;
+    var grid = $id('cvmGrid');
+    var N = 20;
+
+    while (grid.children.length < N) {
+      var cell = document.createElement('div');
+      cell.className = 'cvm-cell';
+      var cv = document.createElement('canvas');
+      cv.className = 'cvm-digit';
+      cell.appendChild(cv);
+      var info = document.createElement('div');
+      info.className = 'cvm-cell-info';
+      cell.appendChild(info);
+      grid.appendChild(cell);
+    }
+
+    for (var i = 0; i < N; i++) {
+      var k = Math.floor(Math.random() * SPB);
+      var trueL = labels[TEST_B * SPB + k];
+      var cv2 = grid.children[i].querySelector('canvas');
+      var info2 = grid.children[i].querySelector('.cvm-cell-info');
+      renderDigitCanvas(cv2, TEST_B, k);
+      var x = getVol(TEST_B, k, false);
+      net.forward(x);
+      var pred = net.getPrediction();
+      var ok = pred === trueL;
+      grid.children[i].style.borderColor = ok ? '#16a34a' : '#dc2626';
+      info2.textContent = pred;
+      info2.style.color = ok ? '#16a34a' : '#dc2626';
+    }
+  }
+
+  /* ── charts ── */
+  function drawChart(canvas, hist, color, yLabel) {
+    var ctx = canvas.getContext('2d');
+    var W = canvas.width, H = canvas.height, p = 24;
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = '#f8fafc'; ctx.fillRect(0, 0, W, H);
+    if (hist.length < 2) return;
+    var mn = Math.min.apply(null, hist), mx = Math.max.apply(null, hist);
+    var rng = mx - mn || 0.01;
+    ctx.strokeStyle = '#e2e8f0'; ctx.lineWidth = 1;
+    for (var i = 0; i < 4; i++) {
+      var gy = p + (i / 3) * (H - p - 8);
+      ctx.beginPath(); ctx.moveTo(p, gy); ctx.lineTo(W - 6, gy); ctx.stroke();
+      ctx.fillStyle = '#94a3b8'; ctx.font = '9px sans-serif';
+      var v = mx - (i / 3) * rng;
+      ctx.fillText(v.toFixed(yLabel === 'acc' ? 2 : 3), 2, gy + 3);
+    }
+    ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.beginPath();
+    hist.forEach(function (v, i) {
+      var x = p + (i / (hist.length - 1)) * (W - p - 6);
+      var y = p + (1 - (v - mn) / rng) * (H - p - 8);
+      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    });
+    ctx.stroke();
+    ctx.fillStyle = color; ctx.font = 'bold 11px sans-serif';
+    var last = hist[hist.length - 1];
+    ctx.fillText(yLabel + ' ' + last.toFixed(yLabel === 'acc' ? 1 : 3) + (yLabel === 'acc' ? '' : ''), p + 4, p - 6);
+  }
+
+  function drawLoss() {
+    if (sLoss >= 0) lossHist.push(sLoss);
+    if (lossHist.length > 500) lossHist.splice(0, lossHist.length - 500);
+    drawChart($id('cvmLoss'), lossHist, '#1d4ed8', 'loss');
+  }
+
+  function drawAcc() {
+    drawChart($id('cvmAcc'), accHist.map(function (a) { return a * 100; }), '#16a34a', 'acc');
+  }
+
+  function updateStats() {
+    var acc = total > 0 ? (correct / total * 100).toFixed(1) : '-';
+    $id('cvmStatus').textContent =
+      'Step\u00a0' + step.toLocaleString()
+      + '\u2002\u00b7\u2002Loss\u00a0' + (sLoss >= 0 ? sLoss.toFixed(3) : '-')
+      + '\u2002\u00b7\u2002Train\u00a0acc\u00a0' + acc + '%';
+  }
+
+  /* ── controls ── */
+  $id('cvmStart').addEventListener('click', function () {
+    running = true; this.disabled = true; $id('cvmPause').disabled = false;
+    trainFrame();
+  });
+  $id('cvmPause').addEventListener('click', function () {
+    running = false; cancelAnimationFrame(rafId);
+    $id('cvmStart').disabled = false; this.disabled = true;
+  });
+  $id('cvmReset').addEventListener('click', function () {
+    running = false; cancelAnimationFrame(rafId);
+    step = 0; sLoss = -1; lossHist = []; accHist = []; correct = 0; total = 0;
+    buildNet();
+    $id('cvmLoss').getContext('2d').clearRect(0, 0, 320, 160);
+    $id('cvmAcc').getContext('2d').clearRect(0, 0, 320, 160);
+    renderGrid();
+    updateStats();
+    $id('cvmStart').disabled = !(loaded[0] && loaded[1] && loaded[TEST_B]);
+    $id('cvmPause').disabled = true;
+  });
+
+  /* ── init ── */
+  buildNet();
+  for (var b = 0; b < 4; b++) loadBatch(b);
+  loadBatch(TEST_B);
+
+}());
+</script>
+
+<style>
+.cvm-intro { font-size:.92rem; opacity:.8; margin-bottom:1rem; }
+.cvm-bar { display:flex; align-items:center; gap:.5rem; flex-wrap:wrap; margin-bottom:1rem; }
+.cvm-bar button { padding:.3rem .75rem; border:1px solid #cbd5e1; border-radius:6px; background:#fff; cursor:pointer; font-size:.85rem; }
+.cvm-bar button:hover:not(:disabled) { background:#f1f5f9; }
+.cvm-bar button:disabled { opacity:.4; cursor:default; }
+.cvm-status { font-size:.82rem; color:#64748b; }
+.cvm-top { display:grid; grid-template-columns:1fr 1fr; gap:.75rem; margin-bottom:.75rem; }
+@media(max-width:600px){ .cvm-top { grid-template-columns:1fr; } }
+.cvm-card { border:1px solid #e2e8f0; border-radius:10px; padding:.9rem; margin-bottom:.75rem; }
+.cvm-card h3 { margin:0 0 .5rem; font-size:.88rem; }
+.cvm-pred-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(52px,1fr)); gap:6px; }
+.cvm-cell { border:2px solid #e2e8f0; border-radius:6px; overflow:hidden; display:flex; flex-direction:column; align-items:center; padding:2px; }
+.cvm-digit { image-rendering:pixelated; width:48px; height:48px; display:block; }
+.cvm-cell-info { font-size:.72rem; font-weight:bold; padding:1px 0 2px; }
+</style>

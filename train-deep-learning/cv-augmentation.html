@@ -1,0 +1,235 @@
+---
+layout: embed
+title: CV Lab 5 - Data Augmentation
+permalink: /train-deep-learning/cv-augmentation/
+---
+
+<p class="cva-intro">Data augmentation artificially expands a training set by randomly transforming each image before each training step. Click "Generate batch" to see 9 augmented versions of the digit below — none are in the original training set.</p>
+
+<div id="cva">
+
+  <div class="cva-top">
+    <section class="cva-card cva-controls-card">
+      <h3>Source digit</h3>
+      <canvas id="cvaSource" width="112" height="112"></canvas>
+      <div class="cva-btn-row">
+        <button id="cvaNew">New digit</button>
+        <button id="cvaBatch">Generate batch</button>
+      </div>
+
+      <div class="cva-sliders">
+        <label>Rotation ±<span id="cvaRotVal">15</span>°
+          <input type="range" id="cvaRot" min="0" max="45" value="15"></label>
+        <label>Scale ±<span id="cvaScaleVal">15</span>%
+          <input type="range" id="cvaScale" min="0" max="40" value="15"></label>
+        <label>Shift ±<span id="cvaShiftVal">8</span>px
+          <input type="range" id="cvaShift" min="0" max="20" value="8"></label>
+        <label>Noise <span id="cvaNoisVal">12</span>%
+          <input type="range" id="cvaNois" min="0" max="50" value="12"></label>
+        <label>
+          <input type="checkbox" id="cvaFlip" checked> Horizontal flip
+        </label>
+      </div>
+    </section>
+
+    <section class="cva-card cva-batch-card">
+      <h3>Augmented batch</h3>
+      <div id="cvaBatchGrid" class="cva-batch-grid"></div>
+    </section>
+  </div>
+
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  var SRC_SZ = 112;
+  var TILE_SZ = 96;
+  var BATCH_N = 9;
+
+  var srcCv = document.getElementById('cvaSource');
+  var srcCtx = srcCv.getContext('2d');
+
+  /* ── digit templates (simple stroked paths) ── */
+  var DIGITS = [
+    function (ctx, sz) { // 0
+      ctx.beginPath(); ctx.ellipse(sz/2, sz/2, sz/3, sz*0.42, 0, 0, Math.PI*2); ctx.stroke();
+    },
+    function (ctx, sz) { // 1
+      ctx.beginPath();
+      ctx.moveTo(sz*0.38, sz*0.2); ctx.lineTo(sz*0.5, sz*0.15); ctx.lineTo(sz*0.5, sz*0.85);
+      ctx.moveTo(sz*0.35, sz*0.85); ctx.lineTo(sz*0.65, sz*0.85);
+      ctx.stroke();
+    },
+    function (ctx, sz) { // 2
+      ctx.beginPath();
+      ctx.arc(sz/2, sz*0.35, sz/4, -Math.PI*0.9, Math.PI*0.1);
+      ctx.lineTo(sz*0.25, sz*0.85); ctx.lineTo(sz*0.75, sz*0.85);
+      ctx.stroke();
+    },
+    function (ctx, sz) { // 3
+      ctx.beginPath();
+      ctx.arc(sz*0.5, sz*0.3, sz*0.25, -Math.PI*0.8, Math.PI*0.6);
+      ctx.moveTo(sz*0.3, sz*0.5); ctx.lineTo(sz*0.62, sz*0.5);
+      ctx.moveTo(sz*0.65, sz*0.5);
+      ctx.arc(sz*0.5, sz*0.7, sz*0.25, -Math.PI*0.6, Math.PI*0.8);
+      ctx.stroke();
+    },
+    function (ctx, sz) { // 4
+      ctx.beginPath();
+      ctx.moveTo(sz*0.6, sz*0.15); ctx.lineTo(sz*0.25, sz*0.6); ctx.lineTo(sz*0.75, sz*0.6);
+      ctx.moveTo(sz*0.6, sz*0.15); ctx.lineTo(sz*0.6, sz*0.85);
+      ctx.stroke();
+    },
+    function (ctx, sz) { // 5
+      ctx.beginPath();
+      ctx.moveTo(sz*0.7, sz*0.15); ctx.lineTo(sz*0.3, sz*0.15); ctx.lineTo(sz*0.28, sz*0.5);
+      ctx.arc(sz*0.52, sz*0.65, sz*0.22, -Math.PI*0.9, Math.PI*0.7);
+      ctx.stroke();
+    },
+    function (ctx, sz) { // 6
+      ctx.beginPath();
+      ctx.arc(sz*0.5, sz*0.68, sz*0.24, 0, Math.PI*2);
+      ctx.moveTo(sz*0.26, sz*0.68); ctx.arc(sz*0.5, sz*0.2, sz*0.28, Math.PI*0.85, Math.PI*1.1, true);
+      ctx.stroke();
+    },
+    function (ctx, sz) { // 7
+      ctx.beginPath();
+      ctx.moveTo(sz*0.25, sz*0.15); ctx.lineTo(sz*0.75, sz*0.15);
+      ctx.lineTo(sz*0.42, sz*0.85);
+      ctx.stroke();
+    },
+    function (ctx, sz) { // 8
+      ctx.beginPath();
+      ctx.arc(sz/2, sz*0.32, sz*0.22, 0, Math.PI*2);
+      ctx.moveTo(sz*0.5+sz*0.25, sz*0.68);
+      ctx.arc(sz/2, sz*0.68, sz*0.25, 0, Math.PI*2);
+      ctx.stroke();
+    },
+    function (ctx, sz) { // 9
+      ctx.beginPath();
+      ctx.arc(sz*0.5, sz*0.32, sz*0.24, 0, Math.PI*2);
+      ctx.moveTo(sz*0.74, sz*0.32); ctx.arc(sz*0.5, sz*0.8, sz*0.28, -Math.PI*0.1, -Math.PI*0.9, true);
+      ctx.stroke();
+    }
+  ];
+
+  var currentDigit = 0;
+
+  function drawSource(d) {
+    currentDigit = d;
+    srcCtx.fillStyle = '#000';
+    srcCtx.fillRect(0, 0, SRC_SZ, SRC_SZ);
+    srcCtx.strokeStyle = '#fff';
+    srcCtx.lineWidth = SRC_SZ * 0.12;
+    srcCtx.lineCap = 'round';
+    srcCtx.lineJoin = 'round';
+    DIGITS[d](srcCtx, SRC_SZ);
+  }
+
+  /* ── augmentation ── */
+  function getParams() {
+    return {
+      rot:   +document.getElementById('cvaRot').value,
+      scale: +document.getElementById('cvaScale').value / 100,
+      shift: +document.getElementById('cvaShift').value,
+      noise: +document.getElementById('cvaNois').value / 100,
+      flip:  document.getElementById('cvaFlip').checked
+    };
+  }
+
+  function randBetween(lo, hi) { return lo + Math.random() * (hi - lo); }
+
+  function augmentedCanvas(p) {
+    var cv = document.createElement('canvas');
+    cv.width = TILE_SZ; cv.height = TILE_SZ;
+    var ctx = cv.getContext('2d');
+
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, 0, TILE_SZ, TILE_SZ);
+
+    var angle = p.rot > 0 ? randBetween(-p.rot, p.rot) * Math.PI / 180 : 0;
+    var scale = p.scale > 0 ? 1 + randBetween(-p.scale, p.scale) : 1;
+    var dx = p.shift > 0 ? randBetween(-p.shift, p.shift) : 0;
+    var dy = p.shift > 0 ? randBetween(-p.shift, p.shift) : 0;
+    var flipH = p.flip && Math.random() < 0.5;
+
+    ctx.save();
+    ctx.translate(TILE_SZ / 2 + dx, TILE_SZ / 2 + dy);
+    ctx.rotate(angle);
+    ctx.scale(scale * (flipH ? -1 : 1) * TILE_SZ / SRC_SZ, scale * TILE_SZ / SRC_SZ);
+    ctx.drawImage(srcCv, -SRC_SZ / 2, -SRC_SZ / 2);
+    ctx.restore();
+
+    if (p.noise > 0) {
+      var imgd = ctx.getImageData(0, 0, TILE_SZ, TILE_SZ);
+      for (var i = 0; i < imgd.data.length; i += 4) {
+        var n = (Math.random() - 0.5) * 2 * p.noise * 255;
+        imgd.data[i]   = Math.min(255, Math.max(0, imgd.data[i]   + n));
+        imgd.data[i+1] = Math.min(255, Math.max(0, imgd.data[i+1] + n));
+        imgd.data[i+2] = Math.min(255, Math.max(0, imgd.data[i+2] + n));
+      }
+      ctx.putImageData(imgd, 0, 0);
+    }
+
+    /* label */
+    var desc = [];
+    if (Math.abs(angle) > 0.01) desc.push((angle * 180 / Math.PI).toFixed(0) + '°');
+    if (Math.abs(scale - 1) > 0.01) desc.push((scale * 100).toFixed(0) + '%');
+    if (flipH) desc.push('flip');
+    ctx.fillStyle = 'rgba(100,200,100,0.9)';
+    ctx.font = '9px sans-serif';
+    ctx.fillText(desc.join(' ') || 'identity', 2, TILE_SZ - 3);
+
+    return cv;
+  }
+
+  function generateBatch() {
+    var grid = document.getElementById('cvaBatchGrid');
+    grid.innerHTML = '';
+    var p = getParams();
+    for (var i = 0; i < BATCH_N; i++) {
+      var cv = augmentedCanvas(p);
+      cv.className = 'cva-tile';
+      grid.appendChild(cv);
+    }
+  }
+
+  /* ── sliders ── */
+  [['cvaRot','cvaRotVal'],['cvaScale','cvaScaleVal'],['cvaShift','cvaShiftVal'],['cvaNois','cvaNoisVal']].forEach(function (pair) {
+    document.getElementById(pair[0]).addEventListener('input', function () {
+      document.getElementById(pair[1]).textContent = this.value;
+    });
+  });
+
+  document.getElementById('cvaNew').addEventListener('click', function () {
+    currentDigit = (currentDigit + 1) % 10;
+    drawSource(currentDigit);
+    generateBatch();
+  });
+  document.getElementById('cvaBatch').addEventListener('click', generateBatch);
+
+  drawSource(0);
+  generateBatch();
+}());
+</script>
+
+<style>
+.cva-intro { font-size:.92rem; opacity:.8; margin-bottom:1rem; }
+.cva-top { display:flex; gap:.75rem; flex-wrap:wrap; }
+.cva-card { border:1px solid #e2e8f0; border-radius:10px; padding:.8rem; }
+.cva-card h3 { margin:0 0 .5rem; font-size:.88rem; }
+.cva-controls-card { display:flex; flex-direction:column; gap:.5rem; min-width:180px; }
+.cva-btn-row { display:flex; gap:.4rem; }
+.cva-btn-row button { flex:1; padding:.3rem .4rem; border:1px solid #cbd5e1; border-radius:6px; background:#fff; font-size:.82rem; cursor:pointer; }
+.cva-btn-row button:hover { background:#f1f5f9; }
+.cva-sliders { display:flex; flex-direction:column; gap:.35rem; }
+.cva-sliders label { font-size:.8rem; display:flex; flex-direction:column; gap:2px; }
+.cva-sliders input[type=range] { width:100%; }
+.cva-sliders input[type=checkbox] { margin-right:4px; }
+.cva-batch-card { flex:1; }
+.cva-batch-grid { display:grid; grid-template-columns:repeat(3, 1fr); gap:4px; }
+.cva-tile { border-radius:4px; image-rendering:pixelated; width:100%; height:auto; display:block; }
+#cvaSource { border-radius:4px; display:block; }
+</style>

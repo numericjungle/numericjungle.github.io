@@ -1,0 +1,383 @@
+---
+layout: embed
+title: CV Lab 6 - Saliency Maps
+permalink: /train-deep-learning/cv-saliency/
+---
+
+<script src="/convnetjs/build/convnet.js"></script>
+<script src="/convnetjs/demo/mnist/mnist_labels.js"></script>
+
+<p class="cvsal-intro">After training, click "Compute saliency" to see which pixels the network focuses on. We grey out 4×4 patches one at a time and measure how much each patch changes the top-class score — bright patches matter most.</p>
+
+<div id="cvsal">
+
+  <div class="cvsal-bar">
+    <button id="cvsalStart" disabled>&#9654; Train</button>
+    <button id="cvsalPause" disabled>&#9646;&#9646; Pause</button>
+    <button id="cvsalSaliency" disabled>&#128065; Saliency</button>
+    <button id="cvsalPrev">&larr;</button>
+    <button id="cvsalNext">&rarr;</button>
+    <button id="cvsalRandom">&#127922; Random</button>
+    <span id="cvsalStatus" class="cvsal-status">Loading MNIST&hellip;</span>
+  </div>
+
+  <div class="cvsal-main">
+    <section class="cvsal-card">
+      <h3>Input digit</h3>
+      <canvas id="cvsalInput" width="112" height="112" class="cvsal-img-canvas"></canvas>
+      <div id="cvsalInfo" class="cvsal-info"></div>
+    </section>
+
+    <section class="cvsal-card">
+      <h3>Saliency map</h3>
+      <canvas id="cvsalHeat" width="112" height="112" class="cvsal-img-canvas"></canvas>
+      <p class="cvsal-note">Brighter = removing this patch hurts confidence more.</p>
+    </section>
+
+    <section class="cvsal-card">
+      <h3>Overlay</h3>
+      <canvas id="cvsalOverlay" width="112" height="112" class="cvsal-img-canvas"></canvas>
+    </section>
+
+    <section class="cvsal-card cvsal-chart-card">
+      <h3>Training loss</h3>
+      <canvas id="cvsalLoss" width="280" height="140"></canvas>
+      <div id="cvsalStep" class="cvsal-step"></div>
+    </section>
+  </div>
+
+  <section class="cvsal-card">
+    <h3>Class probabilities</h3>
+    <div id="cvsalBars" class="cvsal-bars"></div>
+  </section>
+
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  var DIM = 28, CROP = 24, WPIX = DIM * DIM;
+  var SPB = 3000;
+
+  var net, trainer;
+  var running = false, step = 0;
+  var sLoss = -1, lossHist = [];
+  var imgData = [], loaded = [];
+  var testIdx = 0;
+  var rafId = null;
+
+  function $id(id) { return document.getElementById(id); }
+
+  /* ── network ── */
+  function buildNet() {
+    var d = [
+      {type:'input',   out_sx:CROP, out_sy:CROP, out_depth:1},
+      {type:'conv',    sx:5, filters:8,  stride:1, pad:2, activation:'relu'},
+      {type:'pool',    sx:2, stride:2},
+      {type:'conv',    sx:5, filters:16, stride:1, pad:2, activation:'relu'},
+      {type:'pool',    sx:3, stride:3},
+      {type:'softmax', num_classes:10}
+    ];
+    net = new convnetjs.Net();
+    net.makeLayers(d);
+    trainer = new convnetjs.SGDTrainer(net, {method:'adadelta', batch_size:20, l2_decay:0.001});
+  }
+
+  /* ── data ── */
+  function loadBatch(n) {
+    var img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = function () {
+      var c = document.createElement('canvas');
+      c.width = img.width; c.height = img.height;
+      c.getContext('2d').drawImage(img, 0, 0);
+      imgData[n] = c.getContext('2d').getImageData(0, 0, c.width, c.height);
+      loaded[n] = true;
+      if (loaded[0] && loaded[20]) {
+        $id('cvsalStatus').textContent = 'Ready \u2014 click Train';
+        $id('cvsalStart').disabled = false;
+        showTestImage(testIdx);
+      }
+    };
+    img.src = '/convnetjs/demo/mnist/mnist_batch_' + n + '.png';
+  }
+
+  /* ── vol helpers ── */
+  function getVol(batchIdx, k, augment) {
+    var p = imgData[batchIdx].data;
+    var vol = new convnetjs.Vol(DIM, DIM, 1, 0.0);
+    var i = 0;
+    for (var xc = 0; xc < DIM; xc++) {
+      for (var yc = 0; yc < DIM; yc++) {
+        vol.set(yc, xc, 0, p[((WPIX * k) + i) * 4 + 0] / 255.0 - 0.5);
+        i++;
+      }
+    }
+    var dx = augment ? Math.floor(Math.random() * (DIM - CROP + 1)) : 2;
+    var dy = augment ? Math.floor(Math.random() * (DIM - CROP + 1)) : 2;
+    return convnetjs.augment(vol, CROP, dx, dy, false);
+  }
+
+  function rawPixels(batchIdx, k) {
+    var p = imgData[batchIdx].data;
+    var arr = new Array(DIM * DIM);
+    for (var i = 0; i < DIM * DIM; i++) {
+      arr[i] = p[((WPIX * k) + i) * 4 + 0];
+    }
+    return arr;
+  }
+
+  /* ── training ── */
+  function trainFrame() {
+    if (!running) return;
+    for (var i = 0; i < 10; i++) {
+      var nLoaded = 0;
+      for (var b = 0; b < 20; b++) if (loaded[b]) nLoaded++;
+      if (nLoaded === 0) continue;
+      var b2 = Math.floor(Math.random() * nLoaded);
+      var count = 0;
+      for (var bb = 0; bb < 20; bb++) {
+        if (loaded[bb]) { if (count === b2) { b2 = bb; break; } count++; }
+      }
+      var k   = Math.floor(Math.random() * SPB);
+      var lbl = labels[b2 * SPB + k];
+      var x   = getVol(b2, k, true);
+      var inf = trainer.train(x, lbl);
+      sLoss = sLoss < 0 ? inf.loss : 0.99 * sLoss + 0.01 * inf.loss;
+      step++;
+    }
+    if (step % 20 === 0) drawLossChart();
+    $id('cvsalStep').textContent = 'Step\u00a0' + step.toLocaleString()
+      + (sLoss >= 0 ? '\u2002\u00b7\u2002loss\u00a0' + sLoss.toFixed(3) : '');
+    if (step >= 200 && step % 200 === 0) {
+      $id('cvsalSaliency').disabled = false;
+      showTestImage(testIdx);
+    }
+    rafId = requestAnimationFrame(trainFrame);
+  }
+
+  /* ── render image ── */
+  function renderDigit(canvas, pixels28) {
+    var ctx = canvas.getContext('2d');
+    var W = canvas.width, H = canvas.height;
+    var tmp = document.createElement('canvas');
+    tmp.width = DIM; tmp.height = DIM;
+    var tCtx = tmp.getContext('2d');
+    var imgd = tCtx.createImageData(DIM, DIM);
+    for (var xc = 0; xc < DIM; xc++) {
+      for (var yc = 0; yc < DIM; yc++) {
+        var idx = xc * DIM + yc;
+        var pi = (yc * DIM + xc) * 4;
+        imgd.data[pi] = imgd.data[pi+1] = imgd.data[pi+2] = pixels28[idx];
+        imgd.data[pi+3] = 255;
+      }
+    }
+    tCtx.putImageData(imgd, 0, 0);
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(tmp, 0, 0, W, H);
+  }
+
+  /* ── saliency ── */
+  function computeSaliency(vol24, topClass, pixels28) {
+    var baseline = net.forward(vol24).w[topClass];
+    var PATCH = 4, stride = PATCH;
+    var heatmap = new Float32Array(CROP * CROP);
+    var occVol = new convnetjs.Vol(CROP, CROP, 1, 0.0);
+
+    for (var py = 0; py < CROP; py += stride) {
+      for (var px = 0; px < CROP; px += stride) {
+        /* copy vol, grey out patch */
+        for (var xc = 0; xc < CROP; xc++) {
+          for (var yc = 0; yc < CROP; yc++) {
+            occVol.set(yc, xc, 0, vol24.get(yc, xc, 0));
+          }
+        }
+        for (var dy = 0; dy < PATCH && py+dy < CROP; dy++) {
+          for (var dx = 0; dx < PATCH && px+dx < CROP; dx++) {
+            occVol.set(py+dy, px+dx, 0, 0.0);
+          }
+        }
+        var s = net.forward(occVol).w[topClass];
+        var diff = Math.max(0, baseline - s);
+        for (var dy2 = 0; dy2 < PATCH && py+dy2 < CROP; dy2++) {
+          for (var dx2 = 0; dx2 < PATCH && px+dx2 < CROP; dx2++) {
+            heatmap[(py+dy2)*CROP + (px+dx2)] = diff;
+          }
+        }
+      }
+    }
+    return heatmap;
+  }
+
+  function renderHeatmap(canvas, heatmap, W, H) {
+    var ctx = canvas.getContext('2d');
+    var tmp = document.createElement('canvas');
+    tmp.width = CROP; tmp.height = CROP;
+    var tCtx = tmp.getContext('2d');
+    var imgd = tCtx.createImageData(CROP, CROP);
+    var mn = heatmap[0], mx = heatmap[0];
+    for (var i = 0; i < heatmap.length; i++) {
+      if (heatmap[i] < mn) mn = heatmap[i];
+      if (heatmap[i] > mx) mx = heatmap[i];
+    }
+    var rng = mx - mn || 1;
+    for (var xc = 0; xc < CROP; xc++) {
+      for (var yc = 0; yc < CROP; yc++) {
+        var t = (heatmap[yc*CROP+xc] - mn) / rng;
+        var pi = (yc * CROP + xc) * 4;
+        imgd.data[pi]   = Math.round(t * 255);
+        imgd.data[pi+1] = Math.round((1 - Math.abs(t*2 - 1)) * 120);
+        imgd.data[pi+2] = Math.round((1 - t) * 200);
+        imgd.data[pi+3] = 255;
+      }
+    }
+    tCtx.putImageData(imgd, 0, 0);
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(tmp, 0, 0, W, H);
+  }
+
+  function renderOverlay(canvas, pixels28, heatmap, W, H) {
+    var ctx = canvas.getContext('2d');
+    var tmp = document.createElement('canvas');
+    tmp.width = CROP; tmp.height = CROP;
+    var tCtx = tmp.getContext('2d');
+    var imgd = tCtx.createImageData(CROP, CROP);
+    var mn = heatmap[0], mx = heatmap[0];
+    for (var i = 0; i < heatmap.length; i++) {
+      if (heatmap[i] < mn) mn = heatmap[i];
+      if (heatmap[i] > mx) mx = heatmap[i];
+    }
+    var rng = mx - mn || 1;
+    for (var xc = 0; xc < CROP; xc++) {
+      for (var yc = 0; yc < CROP; yc++) {
+        /* use pixels28 with +2 offset (center crop) */
+        var srcX = xc + 2, srcY = yc + 2;
+        var g = pixels28[srcX * DIM + srcY];
+        var t = (heatmap[yc*CROP+xc] - mn) / rng;
+        var pi = (yc * CROP + xc) * 4;
+        imgd.data[pi]   = Math.round(g * 0.4 + t * 200);
+        imgd.data[pi+1] = Math.round(g * 0.4 + (1-t)*40);
+        imgd.data[pi+2] = Math.round(g * 0.5);
+        imgd.data[pi+3] = 255;
+      }
+    }
+    tCtx.putImageData(imgd, 0, 0);
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(tmp, 0, 0, W, H);
+  }
+
+  function renderBars(probs) {
+    var bDiv = $id('cvsalBars');
+    bDiv.innerHTML = '';
+    var indexed = Array.prototype.slice.call(probs).map(function (p, i) { return {d:i, p:p}; });
+    indexed.sort(function (a, b) { return b.p - a.p; });
+    indexed.forEach(function (item) {
+      var pct = Math.max(0, Math.min(100, Math.round(item.p * 100)));
+      var row = document.createElement('div');
+      row.className = 'cvsal-bar-row';
+      row.innerHTML = '<span class="cvsal-bar-lbl">' + item.d + '</span>'
+        + '<div class="cvsal-bar-bg"><div class="cvsal-bar-fill" style="width:' + pct + '%;background:'
+        + (item === indexed[0] ? '#1d4ed8' : '#94a3b8') + '"></div></div>'
+        + '<span class="cvsal-bar-pct">' + pct + '%</span>';
+      bDiv.appendChild(row);
+    });
+  }
+
+  function showTestImage(k) {
+    if (!loaded[20]) return;
+    testIdx = k;
+    var pixels = rawPixels(20, k);
+    renderDigit($id('cvsalInput'), pixels);
+
+    var trueL = labels[20 * SPB + k];
+    var vol24 = getVol(20, k, false);
+    var scores = net.forward(vol24);
+    var pred = net.getPrediction();
+    var ok = pred === trueL;
+    $id('cvsalInfo').innerHTML =
+      'True: <strong>' + trueL + '</strong>'
+      + ' &nbsp;&middot;&nbsp; Pred: <strong style="color:' + (ok ? '#16a34a' : '#dc2626') + '">' + pred + '</strong>';
+    renderBars(scores.w);
+  }
+
+  $id('cvsalSaliency').addEventListener('click', function () {
+    if (!loaded[20] || !net) return;
+    $id('cvsalStatus').textContent = 'Computing\u2026';
+    setTimeout(function () {
+      var pixels = rawPixels(20, testIdx);
+      var vol24 = getVol(20, testIdx, false);
+      var scores = net.forward(vol24);
+      var topClass = net.getPrediction();
+      var heatmap = computeSaliency(vol24, topClass, pixels);
+      renderHeatmap($id('cvsalHeat'), heatmap, 112, 112);
+      renderOverlay($id('cvsalOverlay'), pixels, heatmap, 112, 112);
+      $id('cvsalStatus').textContent = 'Done';
+      setTimeout(function () { $id('cvsalStatus').textContent = ''; }, 1200);
+    }, 0);
+  });
+
+  /* ── controls ── */
+  $id('cvsalStart').addEventListener('click', function () {
+    running = true; this.disabled = true; $id('cvsalPause').disabled = false;
+    $id('cvsalStatus').textContent = 'Training\u2026';
+    trainFrame();
+  });
+  $id('cvsalPause').addEventListener('click', function () {
+    running = false; cancelAnimationFrame(rafId);
+    $id('cvsalStart').disabled = false; this.disabled = true;
+  });
+  $id('cvsalPrev').addEventListener('click', function () { showTestImage((testIdx - 1 + SPB) % SPB); });
+  $id('cvsalNext').addEventListener('click', function () { showTestImage((testIdx + 1) % SPB); });
+  $id('cvsalRandom').addEventListener('click', function () { showTestImage(Math.floor(Math.random() * SPB)); });
+
+  /* ── loss chart ── */
+  function drawLossChart() {
+    if (sLoss >= 0) lossHist.push(sLoss);
+    if (lossHist.length > 400) lossHist.splice(0, lossHist.length - 400);
+    var canvas = $id('cvsalLoss');
+    var ctx = canvas.getContext('2d');
+    var W = canvas.width, H = canvas.height, p = 22;
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = '#f8fafc'; ctx.fillRect(0, 0, W, H);
+    if (lossHist.length < 2) return;
+    var mn = Math.min.apply(null, lossHist), mx = Math.max.apply(null, lossHist);
+    var rng = mx - mn || 0.01;
+    ctx.strokeStyle = '#1d4ed8'; ctx.lineWidth = 2; ctx.beginPath();
+    lossHist.forEach(function (v, i) {
+      var x = p + (i / (lossHist.length - 1)) * (W - p - 6);
+      var y = p + (1 - (v - mn) / rng) * (H - p - 8);
+      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    });
+    ctx.stroke();
+  }
+
+  /* ── init ── */
+  buildNet();
+  for (var b = 0; b < 4; b++) loadBatch(b);
+  loadBatch(20);
+}());
+</script>
+
+<style>
+.cvsal-intro { font-size:.92rem; opacity:.8; margin-bottom:1rem; }
+.cvsal-bar { display:flex; align-items:center; gap:.4rem; flex-wrap:wrap; margin-bottom:.75rem; }
+.cvsal-bar button { padding:.3rem .6rem; border:1px solid #cbd5e1; border-radius:6px; background:#fff; font-size:.82rem; cursor:pointer; }
+.cvsal-bar button:hover:not(:disabled) { background:#f1f5f9; }
+.cvsal-bar button:disabled { opacity:.4; cursor:default; }
+.cvsal-status { font-size:.8rem; color:#64748b; margin-left:.25rem; }
+.cvsal-main { display:flex; gap:.6rem; flex-wrap:wrap; margin-bottom:.6rem; }
+.cvsal-card { border:1px solid #e2e8f0; border-radius:10px; padding:.8rem; margin-bottom:.6rem; }
+.cvsal-card h3 { margin:0 0 .4rem; font-size:.88rem; }
+.cvsal-img-canvas { image-rendering:pixelated; display:block; border-radius:4px; }
+.cvsal-info { font-size:.8rem; margin-top:.3rem; color:#475569; }
+.cvsal-note { font-size:.72rem; color:#94a3b8; margin:.3rem 0 0; }
+.cvsal-chart-card { flex:1; min-width:200px; }
+.cvsal-step { font-size:.78rem; color:#94a3b8; margin-top:.3rem; }
+.cvsal-bars { display:grid; grid-template-columns:repeat(2,1fr); gap:.2rem .75rem; }
+.cvsal-bar-row { display:flex; align-items:center; gap:.4rem; }
+.cvsal-bar-lbl { font-size:.78rem; font-weight:600; width:14px; text-align:right; }
+.cvsal-bar-bg { flex:1; height:8px; background:#e2e8f0; border-radius:4px; overflow:hidden; }
+.cvsal-bar-fill { height:100%; border-radius:4px; transition:width .2s; }
+.cvsal-bar-pct { font-size:.7rem; width:28px; color:#64748b; }
+</style>

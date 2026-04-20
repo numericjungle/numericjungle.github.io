@@ -1,0 +1,219 @@
+---
+layout: embed
+title: CV Lab 1 - Image Filters
+permalink: /train-deep-learning/cv-filters/
+---
+
+<p class="cvf-intro">Pick a convolution kernel and watch it transform the test image in real time. The kernel matrix on the left shows the weights applied to each 3×3 or 5×5 neighbourhood of pixels.</p>
+
+<div id="cvf">
+
+  <div class="cvf-bar">
+    <label for="cvfKernel">Kernel:</label>
+    <select id="cvfKernel"></select>
+    <button id="cvfGenerate">New test image</button>
+  </div>
+
+  <div class="cvf-main">
+    <section class="cvf-card cvf-kernel-card">
+      <h3>Kernel</h3>
+      <div id="cvfKernelViz" class="cvf-kgrid"></div>
+      <p id="cvfKernelDesc" class="cvf-desc"></p>
+    </section>
+    <section class="cvf-card">
+      <h3>Input</h3>
+      <canvas id="cvfInput" width="200" height="200"></canvas>
+    </section>
+    <section class="cvf-card">
+      <h3>Output</h3>
+      <canvas id="cvfOutput" width="200" height="200"></canvas>
+    </section>
+  </div>
+
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  var KERNELS = [
+    { name: 'Identity',       k: [[0,0,0],[0,1,0],[0,0,0]],                       bias:0,   desc: 'Passes the image through unchanged. Each output pixel equals its input.' },
+    { name: 'Sharpen',        k: [[0,-1,0],[-1,5,-1],[0,-1,0]],                   bias:0,   desc: 'Amplifies high-frequency detail by subtracting blurred neighbours.' },
+    { name: 'Box Blur',       k: [[1,1,1],[1,1,1],[1,1,1]],                        bias:0,   norm:9, desc: 'Averages a 3×3 neighbourhood. The simplest low-pass (blur) filter.' },
+    { name: 'Gaussian Blur',  k: [[1,2,1],[2,4,2],[1,2,1]],                        bias:0,   norm:16, desc: 'Weighted average biased toward the centre pixel, mimicking a Gaussian bell curve.' },
+    { name: 'Edge Detect',    k: [[-1,-1,-1],[-1,8,-1],[-1,-1,-1]],               bias:0,   desc: 'Highlights edges in all directions by subtracting the average of all neighbours.' },
+    { name: 'Sobel X',        k: [[-1,0,1],[-2,0,2],[-1,0,1]],                    bias:128, desc: 'Detects vertical edges (horizontal gradient). Bright = rising left-to-right.' },
+    { name: 'Sobel Y',        k: [[-1,-2,-1],[0,0,0],[1,2,1]],                     bias:128, desc: 'Detects horizontal edges (vertical gradient). Bright = rising top-to-bottom.' },
+    { name: 'Emboss',         k: [[-2,-1,0],[-1,1,1],[0,1,2]],                    bias:128, desc: 'Creates a bas-relief illusion by taking a directional derivative at 45°.' },
+    { name: 'Unsharp Mask',   k: [[-1,-1,-1],[-1,9,-1],[-1,-1,-1]],               bias:0,   desc: 'Stronger sharpening: centre weight 9 vs Sharpen\'s 5.' },
+    { name: 'Laplacian',      k: [[0,1,0],[1,-4,1],[0,1,0]],                       bias:128, desc: 'Second-order derivative — bright where curvature is high in any direction.' }
+  ];
+
+  var sel = document.getElementById('cvfKernel');
+  KERNELS.forEach(function (k, i) {
+    var opt = document.createElement('option');
+    opt.value = i; opt.textContent = k.name;
+    sel.appendChild(opt);
+  });
+
+  /* ── canvas setup ── */
+  var inCv = document.getElementById('cvfInput');
+  var outCv = document.getElementById('cvfOutput');
+  var inCtx = inCv.getContext('2d');
+  var outCtx = outCv.getContext('2d');
+  var W = inCv.width, H = inCv.height;
+
+  /* ── generate a richly-textured test image ── */
+  function generateImage() {
+    inCtx.fillStyle = '#1e293b';
+    inCtx.fillRect(0, 0, W, H);
+
+    /* colour gradient background */
+    var grad = inCtx.createLinearGradient(0, 0, W, H);
+    grad.addColorStop(0, '#0f172a');
+    grad.addColorStop(0.5, '#334155');
+    grad.addColorStop(1, '#0f172a');
+    inCtx.fillStyle = grad;
+    inCtx.fillRect(0, 0, W, H);
+
+    /* concentric circles */
+    for (var r = 90; r > 0; r -= 18) {
+      inCtx.beginPath();
+      inCtx.arc(100, 100, r, 0, Math.PI * 2);
+      inCtx.strokeStyle = 'hsl(' + (r * 4) + ',80%,60%)';
+      inCtx.lineWidth = 3;
+      inCtx.stroke();
+    }
+
+    /* diagonal lines */
+    inCtx.lineWidth = 2;
+    for (var i = -H; i < W + H; i += 22) {
+      inCtx.beginPath();
+      inCtx.moveTo(i, 0);
+      inCtx.lineTo(i + H, H);
+      inCtx.strokeStyle = 'rgba(255,255,255,0.15)';
+      inCtx.stroke();
+    }
+
+    /* filled shapes */
+    inCtx.fillStyle = 'rgba(234,179,8,0.75)';
+    inCtx.beginPath();
+    inCtx.arc(50, 50, 30, 0, Math.PI * 2);
+    inCtx.fill();
+
+    inCtx.fillStyle = 'rgba(239,68,68,0.75)';
+    inCtx.fillRect(140, 130, 50, 50);
+
+    inCtx.fillStyle = 'rgba(34,197,94,0.75)';
+    inCtx.beginPath();
+    inCtx.moveTo(155, 30);
+    inCtx.lineTo(185, 80);
+    inCtx.lineTo(125, 80);
+    inCtx.closePath();
+    inCtx.fill();
+
+    /* fine checkerboard patch (high-frequency target) */
+    var sq = 6;
+    for (var cy = 120; cy < 170; cy += sq) {
+      for (var cx = 10; cx < 100; cx += sq) {
+        var even = ((Math.floor(cx / sq) + Math.floor(cy / sq)) % 2 === 0);
+        inCtx.fillStyle = even ? '#fff' : '#000';
+        inCtx.fillRect(cx, cy, sq, sq);
+      }
+    }
+  }
+
+  /* ── convolution ── */
+  function applyKernel(kernelObj) {
+    var flat = [];
+    var rows = kernelObj.k;
+    rows.forEach(function (row) { row.forEach(function (v) { flat.push(v); }); });
+    var norm = kernelObj.norm || 1;
+    var bias = kernelObj.bias || 0;
+    var kSz = rows.length;
+    var half = Math.floor(kSz / 2);
+
+    var src = inCtx.getImageData(0, 0, W, H);
+    var s = src.data;
+    var out = outCtx.createImageData(W, H);
+    var d = out.data;
+
+    for (var y = 0; y < H; y++) {
+      for (var x = 0; x < W; x++) {
+        var rS = 0, gS = 0, bS = 0;
+        for (var ky = 0; ky < kSz; ky++) {
+          for (var kx = 0; kx < kSz; kx++) {
+            var sy = Math.min(H - 1, Math.max(0, y + ky - half));
+            var sx = Math.min(W - 1, Math.max(0, x + kx - half));
+            var kv = flat[ky * kSz + kx] / norm;
+            var pi = (sy * W + sx) * 4;
+            rS += s[pi]     * kv;
+            gS += s[pi + 1] * kv;
+            bS += s[pi + 2] * kv;
+          }
+        }
+        var oi = (y * W + x) * 4;
+        d[oi]     = Math.min(255, Math.max(0, Math.round(rS + bias)));
+        d[oi + 1] = Math.min(255, Math.max(0, Math.round(gS + bias)));
+        d[oi + 2] = Math.min(255, Math.max(0, Math.round(bS + bias)));
+        d[oi + 3] = 255;
+      }
+    }
+    outCtx.putImageData(out, 0, 0);
+  }
+
+  /* ── kernel visualiser ── */
+  function renderKernelViz(kernelObj) {
+    var div = document.getElementById('cvfKernelViz');
+    var rows = kernelObj.k;
+    var norm = kernelObj.norm || 1;
+    var vals = [];
+    rows.forEach(function (r) { r.forEach(function (v) { vals.push(v / norm); }); });
+    var mx = Math.max.apply(null, vals.map(Math.abs)) || 1;
+    var sz = rows.length;
+    div.style.gridTemplateColumns = 'repeat(' + sz + ', 1fr)';
+    div.innerHTML = '';
+    vals.forEach(function (v) {
+      var cell = document.createElement('div');
+      cell.className = 'cvf-kcell';
+      var intensity = Math.round((v / mx) * 127 + 128);
+      var r = v >= 0 ? intensity : 128;
+      var b = v < 0 ? 255 - (intensity - 128) : 128;
+      cell.style.background = 'rgb(' + r + ',128,' + b + ')';
+      cell.textContent = (v % 1 === 0) ? v : v.toFixed(3);
+      div.appendChild(cell);
+    });
+    document.getElementById('cvfKernelDesc').textContent = kernelObj.desc;
+  }
+
+  function update() {
+    var k = KERNELS[+sel.value];
+    renderKernelViz(k);
+    applyKernel(k);
+  }
+
+  sel.addEventListener('change', update);
+  document.getElementById('cvfGenerate').addEventListener('click', function () {
+    generateImage();
+    update();
+  });
+
+  generateImage();
+  update();
+}());
+</script>
+
+<style>
+.cvf-intro { font-size:.92rem; opacity:.8; margin-bottom:1rem; }
+.cvf-bar { display:flex; align-items:center; gap:.6rem; flex-wrap:wrap; margin-bottom:1rem; }
+.cvf-bar select,.cvf-bar button { padding:.3rem .65rem; border:1px solid #cbd5e1; border-radius:6px; background:#fff; font-size:.85rem; cursor:pointer; }
+.cvf-bar button:hover { background:#f1f5f9; }
+.cvf-main { display:flex; gap:.75rem; flex-wrap:wrap; }
+.cvf-card { border:1px solid #e2e8f0; border-radius:10px; padding:.8rem; }
+.cvf-card h3 { margin:0 0 .5rem; font-size:.88rem; }
+.cvf-card canvas { display:block; border-radius:4px; max-width:100%; }
+.cvf-kernel-card { min-width:160px; }
+.cvf-kgrid { display:grid; gap:2px; margin-bottom:.5rem; }
+.cvf-kcell { display:flex; align-items:center; justify-content:center; border-radius:3px; font-size:.7rem; font-family:monospace; height:36px; }
+.cvf-desc { font-size:.75rem; color:#64748b; line-height:1.45; margin:0; }
+</style>
