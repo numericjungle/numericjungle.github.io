@@ -1,4 +1,5 @@
 .jekyll-metadata
+.bundle/gemfile_lock_hash
 .sass-cache
 run_server.sh
 create-new-post.sh

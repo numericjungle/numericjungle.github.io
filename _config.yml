@@ -1,6 +1,6 @@
 name: Numeric Jungle
 url: 'https://numericjungle.github.io'
-description: ""
+description: "Notes from the Frontier"
 
 exclude:
   - vendor

@@ -1,0 +1,90 @@
+---
+layout: page
+title: RL Lab
+description: "All RL 101 lessons and interactive demos in one place."
+---
+
+<p class="rl-lab-intro">Ten lessons taking you from curve fitting to policy gradients, each with a live in-browser demo.</p>
+
+<h2 class="rl-section-heading">Lessons</h2>
+
+<ol class="rl-lesson-list">
+{% assign rl_posts = site.posts | where_exp: "post", "post.title contains 'RL 101'" | sort: "date" %}
+{% for post in rl_posts %}
+  <li>
+    <a href="{{ post.url }}">{{ post.title | remove: "RL 101 - " }}</a>
+    <span class="rl-date">{{ post.date | date: "%b %Y" }}</span>
+  </li>
+{% endfor %}
+</ol>
+
+<h2 class="rl-section-heading">Live Demos</h2>
+
+<div class="rl-demo-grid">
+  <a class="rl-demo-card" href="/train-deep-learning/inverted-pendulum/" target="_blank" rel="noopener">
+    <span class="rl-demo-icon">⚖️</span>
+    <span class="rl-demo-label">Inverted Pendulum</span>
+  </a>
+  <a class="rl-demo-card" href="/train-deep-learning/lunar-lander/" target="_blank" rel="noopener">
+    <span class="rl-demo-icon">🚀</span>
+    <span class="rl-demo-label">Lunar Lander PG</span>
+  </a>
+  <a class="rl-demo-card" href="/convnetjs/demo/dqn.html" target="_blank" rel="noopener">
+    <span class="rl-demo-icon">🎮</span>
+    <span class="rl-demo-label">Deep Q-Networks</span>
+  </a>
+  <a class="rl-demo-card" href="/convnetjs/demo/mnist.html" target="_blank" rel="noopener">
+    <span class="rl-demo-icon">✍️</span>
+    <span class="rl-demo-label">MNIST CNN</span>
+  </a>
+  <a class="rl-demo-card" href="/convnetjs/demo/cifar10.html" target="_blank" rel="noopener">
+    <span class="rl-demo-icon">🖼️</span>
+    <span class="rl-demo-label">CIFAR-10 CNN</span>
+  </a>
+  <a class="rl-demo-card" href="/convnetjs/demo/classify2d.html" target="_blank" rel="noopener">
+    <span class="rl-demo-icon">🔵</span>
+    <span class="rl-demo-label">2-D Classifier</span>
+  </a>
+  <a class="rl-demo-card" href="/convnetjs/demo/regression.html" target="_blank" rel="noopener">
+    <span class="rl-demo-icon">📈</span>
+    <span class="rl-demo-label">1-D Regression</span>
+  </a>
+  <a class="rl-demo-card" href="/convnetjs/demo/autoencoder.html" target="_blank" rel="noopener">
+    <span class="rl-demo-icon">🔬</span>
+    <span class="rl-demo-label">Autoencoder</span>
+  </a>
+</div>
+
+<style>
+.rl-lab-intro { opacity: 0.75; margin-bottom: 1.5rem; }
+
+.rl-section-heading { margin-top: 2rem; padding-bottom: 0.3rem; border-bottom: 2px solid currentColor; opacity: 0.85; }
+
+.rl-lesson-list { padding-left: 1.2rem; }
+.rl-lesson-list li { padding: 0.35rem 0; display: flex; align-items: baseline; gap: 0.6rem; }
+.rl-lesson-list a { flex: 1; }
+.rl-date { font-size: 0.78rem; opacity: 0.5; white-space: nowrap; }
+
+.rl-demo-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+.rl-demo-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.9rem 0.5rem;
+  border: 1px solid currentColor;
+  border-radius: 10px;
+  text-decoration: none;
+  opacity: 0.75;
+  transition: opacity 0.15s;
+  text-align: center;
+}
+.rl-demo-card:hover { opacity: 1; }
+.rl-demo-icon { font-size: 1.6rem; }
+.rl-demo-label { font-size: 0.78rem; line-height: 1.3; }
+</style>

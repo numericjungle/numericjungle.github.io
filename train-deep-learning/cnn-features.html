@@ -1,0 +1,400 @@
+---
+layout: embed
+title: CNN Feature Explorer
+permalink: /train-deep-learning/cnn-features/
+---
+
+<script src="/convnetjs/build/convnet.js"></script>
+<script src="/convnetjs/demo/cifar10/cifar10_labels.js"></script>
+
+<p class="cfe-intro">A 3-layer CNN trains on CIFAR-10 in your browser. Watch Conv&nbsp;1 filters evolve from noise into edge and colour detectors, then step through any test image to see what each layer responds to.</p>
+
+<div id="cfe">
+
+  <div class="cfe-bar">
+    <button id="cfeStart" disabled>&#9654; Start</button>
+    <button id="cfePause" disabled>&#9646;&#9646; Pause</button>
+    <button id="cfeReset">&#8635; Reset</button>
+    <span id="cfeStatus" class="cfe-status">Loading CIFAR-10 data&hellip;</span>
+  </div>
+
+  <div class="cfe-top">
+    <section class="cfe-card">
+      <h3>Training loss</h3>
+      <canvas id="cfeLoss" width="340" height="180"></canvas>
+    </section>
+    <section class="cfe-card">
+      <h3>Conv&nbsp;1 filters &mdash; <small>16 learned RGB detectors</small></h3>
+      <div id="cfeFilters" class="cfe-tile-grid"></div>
+      <p class="cfe-note">Random noise at init &rarr; oriented edges and colour blobs after ~2 k steps.</p>
+    </section>
+  </div>
+
+  <section class="cfe-card">
+    <div class="cfe-explorer-hdr">
+      <h3>Layer-by-layer activations</h3>
+      <div class="cfe-nav">
+        <button id="cfePrev">&larr;</button>
+        <button id="cfeRandom">Random</button>
+        <button id="cfeNext">&rarr;</button>
+        <span id="cfeImgInfo" class="cfe-imginfo">&mdash;</span>
+      </div>
+    </div>
+
+    <div class="cfe-layers">
+      <div class="cfe-layer-col">
+        <div class="cfe-layer-lbl">Input<br><small>32&times;32 RGB</small></div>
+        <canvas id="cfeInput" class="cfe-input-canvas"></canvas>
+      </div>
+      <div class="cfe-layer-col">
+        <div class="cfe-layer-lbl">After Conv&nbsp;1<br><small>16 maps &middot; 32&times;32<br>lines &amp; edges</small></div>
+        <div id="cfeAct1" class="cfe-tile-grid cfe-acts"></div>
+      </div>
+      <div class="cfe-layer-col">
+        <div class="cfe-layer-lbl">After Conv&nbsp;2<br><small>20 maps &middot; 16&times;16<br>textures &amp; curves</small></div>
+        <div id="cfeAct2" class="cfe-tile-grid cfe-acts"></div>
+      </div>
+      <div class="cfe-layer-col">
+        <div class="cfe-layer-lbl">After Conv&nbsp;3<br><small>20 maps &middot; 8&times;8<br>object parts</small></div>
+        <div id="cfeAct3" class="cfe-tile-grid cfe-acts"></div>
+      </div>
+    </div>
+
+    <div id="cfePredBars" class="cfe-preds"></div>
+  </section>
+
+</div><!-- #cfe -->
+
+<script>
+(function () {
+  'use strict';
+
+  var CLS = ['airplane','car','bird','cat','deer','dog','frog','horse','ship','truck'];
+  var DIM = 32, CH = 3, WPIX = DIM * DIM;
+  var TEST_B = 50, SPB = 1000;
+
+  var net, trainer;
+  var running = false, step = 0;
+  var sLoss = -1, lossHist = [];
+  var correct = 0, total = 0;
+  var imgData = new Array(51).fill(null);
+  var bLoaded = new Array(51).fill(false);
+  var trainBatches = [];
+  var testIdx = 0;
+  var rafId = null;
+
+  function $id(id) { return document.getElementById(id); }
+
+  /* ── network ── */
+  function buildNet() {
+    var d = [
+      {type:'input', out_sx:32, out_sy:32, out_depth:3},
+      {type:'conv', sx:5, filters:16, stride:1, pad:2, activation:'relu'},
+      {type:'pool', sx:2, stride:2},
+      {type:'conv', sx:5, filters:20, stride:1, pad:2, activation:'relu'},
+      {type:'pool', sx:2, stride:2},
+      {type:'conv', sx:5, filters:20, stride:1, pad:2, activation:'relu'},
+      {type:'pool', sx:2, stride:2},
+      {type:'softmax', num_classes:10}
+    ];
+    net = new convnetjs.Net();
+    net.makeLayers(d);
+    trainer = new convnetjs.SGDTrainer(net, {method:'adadelta', batch_size:4, l2_decay:0.0001});
+  }
+
+  /* ── data ── */
+  function loadBatch(n) {
+    var img = new Image();
+    img.onload = function () {
+      var c = document.createElement('canvas');
+      c.width = img.width; c.height = img.height;
+      var ctx = c.getContext('2d');
+      ctx.drawImage(img, 0, 0);
+      imgData[n] = ctx.getImageData(0, 0, c.width, c.height);
+      bLoaded[n] = true;
+      if (n < TEST_B) trainBatches.push(n);
+      if (bLoaded[0] && bLoaded[TEST_B]) {
+        $id('cfeStatus').textContent = 'Ready \u2014 click Start to train';
+        $id('cfeStart').disabled = false;
+        drawFilters();
+        runTest(testIdx);
+      }
+    };
+    img.src = '/convnetjs/demo/cifar10/cifar10_batch_' + n + '.png';
+  }
+
+  function getVol(b, k, aug) {
+    var p = imgData[b].data;
+    var x = new convnetjs.Vol(DIM, DIM, CH, 0.0);
+    for (var dc = 0; dc < CH; dc++) {
+      var i = 0;
+      for (var xc = 0; xc < DIM; xc++) {
+        for (var yc = 0; yc < DIM; yc++) {
+          x.set(yc, xc, dc, p[((WPIX * k) + i) * 4 + dc] / 255.0 - 0.5);
+          i++;
+        }
+      }
+    }
+    if (aug) {
+      var dx = Math.floor(Math.random() * 5 - 2);
+      var dy = Math.floor(Math.random() * 5 - 2);
+      x = convnetjs.augment(x, DIM, dx, dy, Math.random() < 0.5);
+    }
+    return x;
+  }
+
+  /* ── training ── */
+  function trainFrame() {
+    if (!running) return;
+    for (var i = 0; i < 4; i++) {
+      var bi  = trainBatches[Math.floor(Math.random() * trainBatches.length)];
+      var k   = Math.floor(Math.random() * SPB);
+      var x   = getVol(bi, k, true);
+      var lbl = labels[bi * SPB + k];
+      var inf = trainer.train(x, lbl);
+      sLoss = sLoss < 0 ? inf.loss : 0.99 * sLoss + 0.01 * inf.loss;
+      if (net.getPrediction() === lbl) correct++;
+      total++; step++;
+    }
+    if (step % 16  === 0) { drawLoss(); updateStats(); }
+    if (step % 200 === 0) { drawFilters(); runTest(testIdx); }
+    rafId = requestAnimationFrame(trainFrame);
+  }
+
+  /* ── render helpers ── */
+  function renderFilterRGB(canvas, f) {
+    canvas.width = f.sx; canvas.height = f.sy;
+    var ctx = canvas.getContext('2d');
+    var g = ctx.createImageData(f.sx, f.sy);
+    var mn = 1e9, mx = -1e9;
+    for (var i = 0; i < f.w.length; i++) { if (f.w[i] < mn) mn = f.w[i]; if (f.w[i] > mx) mx = f.w[i]; }
+    var rng = mx - mn || 1;
+    for (var x = 0; x < f.sx; x++) for (var y = 0; y < f.sy; y++) {
+      var pp = (y * f.sx + x) * 4;
+      g.data[pp]   = Math.round((f.get(x, y, 0) - mn) / rng * 255);
+      g.data[pp+1] = Math.round((f.get(x, y, 1) - mn) / rng * 255);
+      g.data[pp+2] = Math.round((f.get(x, y, 2) - mn) / rng * 255);
+      g.data[pp+3] = 255;
+    }
+    ctx.putImageData(g, 0, 0);
+  }
+
+  function renderGray(canvas, vol, d) {
+    canvas.width = vol.sx; canvas.height = vol.sy;
+    var ctx = canvas.getContext('2d');
+    var g = ctx.createImageData(vol.sx, vol.sy);
+    var mn = 1e9, mx = -1e9;
+    for (var x = 0; x < vol.sx; x++) for (var y = 0; y < vol.sy; y++) {
+      var v = vol.get(x, y, d); if (v < mn) mn = v; if (v > mx) mx = v;
+    }
+    var rng = mx - mn || 1;
+    for (var x = 0; x < vol.sx; x++) for (var y = 0; y < vol.sy; y++) {
+      var dv = Math.round((vol.get(x, y, d) - mn) / rng * 255);
+      var pp = (y * vol.sx + x) * 4;
+      g.data[pp] = g.data[pp+1] = g.data[pp+2] = dv; g.data[pp+3] = 255;
+    }
+    ctx.putImageData(g, 0, 0);
+  }
+
+  function renderRGB(canvas, vol) {
+    canvas.width = vol.sx; canvas.height = vol.sy;
+    var ctx = canvas.getContext('2d');
+    var g = ctx.createImageData(vol.sx, vol.sy);
+    for (var x = 0; x < vol.sx; x++) for (var y = 0; y < vol.sy; y++) {
+      var pp = (y * vol.sx + x) * 4;
+      g.data[pp]   = Math.max(0, Math.min(255, Math.round((vol.get(x, y, 0) + 0.5) * 255)));
+      g.data[pp+1] = Math.max(0, Math.min(255, Math.round((vol.get(x, y, 1) + 0.5) * 255)));
+      g.data[pp+2] = Math.max(0, Math.min(255, Math.round((vol.get(x, y, 2) + 0.5) * 255)));
+      g.data[pp+3] = 255;
+    }
+    ctx.putImageData(g, 0, 0);
+  }
+
+  function syncGrid(divId, count) {
+    var div = $id(divId);
+    while (div.children.length < count) {
+      var c = document.createElement('canvas');
+      c.className = 'cfe-tile';
+      div.appendChild(c);
+    }
+    while (div.children.length > count) div.removeChild(div.lastChild);
+    return div;
+  }
+
+  function drawFilters() {
+    if (!net) return;
+    var convLayers = net.layers.filter(function (l) { return l.layer_type === 'conv'; });
+    if (!convLayers.length) return;
+    var filters = convLayers[0].filters;
+    syncGrid('cfeFilters', filters.length);
+    var div = $id('cfeFilters');
+    for (var i = 0; i < filters.length; i++) renderFilterRGB(div.children[i], filters[i]);
+  }
+
+  function renderActGrid(divId, vol) {
+    var div = syncGrid(divId, vol.depth);
+    for (var d = 0; d < vol.depth; d++) renderGray(div.children[d], vol, d);
+  }
+
+  /* ── test image explorer ── */
+  function runTest(k) {
+    if (!net || !bLoaded[TEST_B]) return;
+    var x = getVol(TEST_B, k, false);
+    var trueL = labels[TEST_B * SPB + k];
+    var scores = net.forward(x);
+
+    renderRGB($id('cfeInput'), x);
+
+    var relus = net.layers.filter(function (l) { return l.layer_type === 'relu'; });
+    if (relus[0]) renderActGrid('cfeAct1', relus[0].out_act);
+    if (relus[1]) renderActGrid('cfeAct2', relus[1].out_act);
+    if (relus[2]) renderActGrid('cfeAct3', relus[2].out_act);
+
+    var probs = Array.prototype.slice.call(scores.w);
+    var predIdx = probs.indexOf(Math.max.apply(null, probs));
+    var ok = predIdx === trueL;
+    $id('cfeImgInfo').innerHTML =
+      'True: <strong>' + CLS[trueL] + '</strong>'
+      + ' &nbsp;&middot;&nbsp; Predicted: <strong style="color:' + (ok ? '#16a34a' : '#dc2626') + '">'
+      + CLS[predIdx] + '</strong> ' + (ok ? '&#10003;' : '&#10007;');
+
+    var indexed = CLS.map(function (n, i) { return {name: n, p: probs[i]}; });
+    indexed.sort(function (a, b) { return b.p - a.p; });
+    var bDiv = $id('cfePredBars');
+    bDiv.innerHTML = '';
+    indexed.forEach(function (item) {
+      var pct = Math.max(0, Math.min(100, Math.round(item.p * 100)));
+      var row = document.createElement('div');
+      row.className = 'cfe-pred-row';
+      row.innerHTML = '<span class="cfe-pred-lbl">' + item.name + '</span>'
+        + '<div class="cfe-bar-bg"><div class="cfe-bar-fill" style="width:' + pct + '%"></div></div>'
+        + '<span class="cfe-pred-pct">' + pct + '%</span>';
+      bDiv.appendChild(row);
+    });
+  }
+
+  /* ── loss graph ── */
+  function drawLoss() {
+    if (sLoss >= 0) lossHist.push(sLoss);
+    if (lossHist.length > 600) lossHist.splice(0, lossHist.length - 600);
+    var canvas = $id('cfeLoss');
+    var ctx = canvas.getContext('2d');
+    var W = canvas.width, H = canvas.height, p = 30;
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = '#f8fafc'; ctx.fillRect(0, 0, W, H);
+    if (lossHist.length < 2) return;
+    var mn = Math.min.apply(null, lossHist), mx = Math.max.apply(null, lossHist);
+    var rng = mx - mn || 0.01;
+    ctx.strokeStyle = '#e2e8f0'; ctx.lineWidth = 1;
+    for (var i = 0; i < 5; i++) {
+      var gy = p + (i / 4) * (H - 2 * p);
+      ctx.beginPath(); ctx.moveTo(p, gy); ctx.lineTo(W - 6, gy); ctx.stroke();
+      ctx.fillStyle = '#94a3b8'; ctx.font = '9px sans-serif';
+      ctx.fillText((mx - (i / 4) * rng).toFixed(2), 2, gy + 3);
+    }
+    ctx.strokeStyle = '#1d4ed8'; ctx.lineWidth = 2; ctx.beginPath();
+    lossHist.forEach(function (v, i) {
+      var x = p + (i / (lossHist.length - 1)) * (W - p - 6);
+      var y = p + (1 - (v - mn) / rng) * (H - 2 * p);
+      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    });
+    ctx.stroke();
+    ctx.fillStyle = '#1e40af'; ctx.font = 'bold 11px sans-serif';
+    ctx.fillText('loss ' + sLoss.toFixed(3), p + 4, p - 8);
+  }
+
+  function updateStats() {
+    var acc = total > 0 ? (correct / total * 100).toFixed(1) : '-';
+    $id('cfeStatus').textContent =
+      'Step\u00a0' + step.toLocaleString()
+      + '\u2002\u00b7\u2002Loss\u00a0' + (sLoss >= 0 ? sLoss.toFixed(3) : '-')
+      + '\u2002\u00b7\u2002Train\u00a0acc\u00a0' + acc + '%';
+  }
+
+  /* ── controls ── */
+  $id('cfeStart').addEventListener('click', function () {
+    running = true; this.disabled = true; $id('cfePause').disabled = false;
+    trainFrame();
+  });
+  $id('cfePause').addEventListener('click', function () {
+    running = false; cancelAnimationFrame(rafId);
+    $id('cfeStart').disabled = false; this.disabled = true;
+  });
+  $id('cfeReset').addEventListener('click', function () {
+    running = false; cancelAnimationFrame(rafId);
+    step = 0; sLoss = -1; lossHist = []; correct = 0; total = 0;
+    buildNet(); drawFilters(); runTest(testIdx); updateStats();
+    $id('cfeLoss').getContext('2d').clearRect(0, 0, 340, 180);
+    $id('cfeStart').disabled = !(bLoaded[0] && bLoaded[TEST_B]);
+    $id('cfePause').disabled = true;
+  });
+  $id('cfePrev').addEventListener('click', function () { testIdx = (testIdx - 1 + SPB) % SPB; runTest(testIdx); });
+  $id('cfeNext').addEventListener('click', function () { testIdx = (testIdx + 1) % SPB; runTest(testIdx); });
+  $id('cfeRandom').addEventListener('click', function () { testIdx = Math.floor(Math.random() * SPB); runTest(testIdx); });
+
+  /* ── init ── */
+  buildNet();
+  $id('cfeStart').disabled = true;
+  loadBatch(0);
+  loadBatch(TEST_B);
+
+}());
+</script>
+
+<style>
+.cfe-intro { color:#475569; margin-bottom:1rem; font-size:.93rem; }
+
+/* controls bar */
+.cfe-bar { display:flex; align-items:center; gap:.5rem; flex-wrap:wrap; margin-bottom:1rem; }
+.cfe-bar button { padding:.3rem .75rem; border:1px solid #cbd5e1; border-radius:6px; background:#fff;
+  cursor:pointer; font-size:.85rem; }
+.cfe-bar button:hover:not(:disabled) { background:#f1f5f9; }
+.cfe-bar button:disabled { opacity:.4; cursor:default; }
+.cfe-status { font-size:.82rem; color:#64748b; margin-left:.25rem; }
+
+/* cards */
+.cfe-card { border:1px solid #e2e8f0; border-radius:10px; padding:1rem; margin-bottom:1rem; }
+.cfe-card h3 { margin:0 0 .6rem; font-size:.92rem; }
+.cfe-note { font-size:.75rem; color:#94a3b8; margin:.4rem 0 0; }
+
+/* top 2-col grid */
+.cfe-top { display:grid; grid-template-columns:1fr 1fr; gap:1rem; }
+@media(max-width:600px){ .cfe-top { grid-template-columns:1fr; } }
+
+/* tile grids (filters + act maps) */
+.cfe-tile-grid { display:flex; flex-wrap:wrap; gap:2px; }
+.cfe-tile {
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  width:40px; height:40px;
+  border:1px solid #e2e8f0; border-radius:2px;
+}
+
+/* explorer */
+.cfe-explorer-hdr { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:.5rem; margin-bottom:.75rem; }
+.cfe-explorer-hdr h3 { margin:0; font-size:.92rem; }
+.cfe-nav { display:flex; align-items:center; gap:.35rem; }
+.cfe-nav button { padding:.2rem .6rem; border:1px solid #cbd5e1; border-radius:5px; background:#fff; cursor:pointer; font-size:.82rem; }
+.cfe-nav button:hover { background:#f1f5f9; }
+.cfe-imginfo { font-size:.82rem; color:#475569; }
+
+/* layers row */
+.cfe-layers { display:flex; gap:1rem; overflow-x:auto; padding-bottom:.5rem; margin-bottom:.75rem; }
+.cfe-layer-col { flex:0 0 auto; display:flex; flex-direction:column; align-items:flex-start; gap:.4rem; }
+.cfe-layer-lbl { font-size:.75rem; color:#475569; line-height:1.4; min-width:80px; }
+.cfe-input-canvas {
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  width:96px; height:96px;
+  border:1px solid #e2e8f0; border-radius:4px;
+}
+.cfe-acts { max-width:170px; }
+
+/* predictions */
+.cfe-preds { display:grid; grid-template-columns:1fr 1fr; gap:.2rem .75rem; }
+.cfe-pred-row { display:flex; align-items:center; gap:.4rem; }
+.cfe-pred-lbl { font-size:.75rem; width:52px; text-align:right; color:#475569; flex-shrink:0; }
+.cfe-bar-bg { flex:1; height:8px; background:#e2e8f0; border-radius:4px; overflow:hidden; }
+.cfe-bar-fill { height:100%; background:#1d4ed8; border-radius:4px; transition:width .2s; }
+.cfe-pred-pct { font-size:.72rem; width:28px; color:#64748b; flex-shrink:0; }
+</style>

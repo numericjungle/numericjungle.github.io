@@ -72,15 +72,26 @@ ensure_bundler() {
 
 ensure_bundler
 
-# 3) Use local vendor/ bundle path for project dependencies
-bundle config set --local path 'vendor/bundle'
+# 3) Use local vendor/ bundle path for project dependencies (skip if already set)
+if ! bundle config get path 2>/dev/null | grep -q 'vendor/bundle'; then
+  bundle config set --local path 'vendor/bundle'
+fi
 
-# 4) Install gems
-log "Installing gems (this may take a minute on first run)..."
-if ! bundle install; then
-  warn "Initial bundle install failed; attempting to update bundler and retry."
-  bundle update --bundler || true
-  bundle install
+# 4) Install gems — skip if Gemfile.lock hasn't changed since last successful install
+LOCK_HASH_FILE=".bundle/gemfile_lock_hash"
+CURRENT_HASH=$(md5 -q Gemfile.lock 2>/dev/null || md5sum Gemfile.lock 2>/dev/null | cut -d' ' -f1)
+CACHED_HASH=$(cat "$LOCK_HASH_FILE" 2>/dev/null || true)
+
+if [[ "$CURRENT_HASH" != "$CACHED_HASH" ]]; then
+  log "Gemfile.lock changed — installing gems..."
+  if ! bundle install; then
+    warn "Initial bundle install failed; attempting to update bundler and retry."
+    bundle update --bundler || true
+    bundle install
+  fi
+  echo "$CURRENT_HASH" > "$LOCK_HASH_FILE"
+else
+  log "Gems up to date (Gemfile.lock unchanged)."
 fi
 
 # 5) Script flags
@@ -131,15 +142,31 @@ if [[ "$prod_mode" == true ]]; then
   fi
 fi
 
-# 6) Build then serve
-log "Building site..."
-bundle exec jekyll build
+# 6) Serve (jekyll serve builds automatically on startup; --incremental skips unchanged files)
+#
+# In dev mode we exclude the large CIFAR-10/MNIST data dirs (127 MB) from the
+# Jekyll build and symlink them into _site instead.  keep_files in _config_dev.yml
+# tells Jekyll not to wipe those symlinks between builds.
+CONFIG_ARG="_config.yml"
+if [[ "$prod_mode" == false ]]; then
+  CONFIG_ARG="_config.yml,_config_dev.yml"
+
+  # Pre-create symlinks so keep_files can preserve them through the build.
+  for data_dir in convnetjs/demo/cifar10 convnetjs/demo/mnist; do
+    link="_site/$data_dir"
+    if [[ ! -e "$link" ]]; then
+      mkdir -p "$(dirname "$link")"
+      ln -sfn "$(pwd)/$data_dir" "$link"
+      log "Symlinked large data dir: _site/$data_dir"
+    fi
+  done
+fi
 
 log "Starting server... (pass --drafts to include drafts, or --prod to exclude drafts)"
 if [[ "$serve_arg_count" -gt 0 ]]; then
-  bundle exec jekyll serve "${serve_args[@]}"
+  bundle exec jekyll serve --incremental --config "$CONFIG_ARG" "${serve_args[@]}"
 else
-  bundle exec jekyll serve
+  bundle exec jekyll serve --incremental --config "$CONFIG_ARG"
 fi
 
 # Note: We intentionally do NOT modify your shell profile or require rbenv here.

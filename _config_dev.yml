@@ -1,0 +1,20 @@
+# Local development overrides.
+# Jekyll's multi-config loading REPLACES arrays (not merges), so this file must
+# repeat every entry from _config.yml's exclude list and add the large data dirs.
+# Without carrying vendor forward, Jekyll would process all 98 installed gems.
+
+exclude:
+  - vendor
+  - Gemfile
+  - Gemfile.lock
+  - README.md
+  - convnetjs/demo/cifar10
+  - convnetjs/demo/mnist
+  - convnetjs/demo/cifar10_parse.zip
+  - convnetjs/demo/mnist_parse.zip
+
+# Preserve the data dirs in _site between builds so the serve step can
+# access them via the symlinks that run-server.sh creates on first run.
+keep_files:
+  - convnetjs/demo/cifar10
+  - convnetjs/demo/mnist
