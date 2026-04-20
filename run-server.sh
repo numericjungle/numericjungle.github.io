@@ -1,10 +1,43 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SCRIPT_DIR"
+
 # Helper: print header
 log() { printf "\033[1;34m[dev]\033[0m %s\n" "$*"; }
 warn() { printf "\033[1;33m[warn]\033[0m %s\n" "$*"; }
 err() { printf "\033[1;31m[err]\033[0m %s\n" "$*"; }
+
+incremental_metadata_is_stale() {
+  local metadata_file=".jekyll-metadata"
+  [[ -f "$metadata_file" ]] || return 1
+
+  if command -v strings >/dev/null 2>&1; then
+    local metadata_dump
+    metadata_dump="$(strings "$metadata_file" 2>/dev/null || true)"
+
+    if grep -Eq '/(node_modules|scrapers|__pycache__)/|/package(-lock)?\.json|/run-server\.sh|/post\.sh|/new_post\.py|/convert_math_delimiters\.py|/tmp_rovodev_server_output\.log' <<<"$metadata_dump"; then
+      return 0
+    fi
+
+    while IFS= read -r tracked_line; do
+      [[ "$tracked_line" == *"$SCRIPT_DIR/"* ]] || continue
+      local tracked_path="${tracked_line#*"$SCRIPT_DIR/"}"
+      tracked_path="$SCRIPT_DIR/$tracked_path"
+      [[ -e "$tracked_path" ]] || return 0
+    done <<<"$metadata_dump"
+  fi
+
+  return 1
+}
+
+reset_incremental_state_if_needed() {
+  if incremental_metadata_is_stale; then
+    warn "Resetting stale Jekyll incremental metadata before starting the dev server."
+    rm -f .jekyll-metadata
+  fi
+}
 
 # 0) Initialize rbenv if it's installed
 if command -v rbenv >/dev/null 2>&1; then
@@ -150,6 +183,7 @@ fi
 CONFIG_ARG="_config.yml"
 if [[ "$prod_mode" == false ]]; then
   CONFIG_ARG="_config.yml,_config_dev.yml"
+  reset_incremental_state_if_needed
 
   # Pre-create symlinks so keep_files can preserve them through the build.
   for data_dir in convnetjs/demo/cifar10 convnetjs/demo/mnist; do

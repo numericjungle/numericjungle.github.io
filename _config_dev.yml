@@ -4,10 +4,23 @@
 # Without carrying vendor forward, Jekyll would process all 98 installed gems.
 
 exclude:
+  - .bundle
   - vendor
+  - node_modules
+  - __pycache__
+  - .github
   - Gemfile
   - Gemfile.lock
   - README.md
+  - SETUP_DEV_ENVIRONMENT.md
+  - convert_math_delimiters.py
+  - new_post.py
+  - post.sh
+  - run-server.sh
+  - package.json
+  - package-lock.json
+  - scrapers
+  - tmp_rovodev_server_output.log
   - convnetjs/demo/cifar10
   - convnetjs/demo/mnist
   - convnetjs/demo/cifar10_parse.zip
@@ -18,3 +31,6 @@ exclude:
 keep_files:
   - convnetjs/demo/cifar10
   - convnetjs/demo/mnist
+
+gist:
+  noscript: false

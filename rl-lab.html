@@ -9,7 +9,7 @@ description: "All RL 101 lessons and interactive demos in one place."
 <h2 class="rl-section-heading">Lessons</h2>
 
 <ol class="rl-lesson-list">
-{% assign rl_posts = site.posts | where_exp: "post", "post.title contains 'RL 101'" | sort: "date" %}
+{% assign rl_posts = site.posts | where_exp: "post", "post.title contains 'RL 101' or post.path contains 'rl-101'" | sort: "date" %}
 {% for post in rl_posts %}
   <li>
     <a href="{{ post.url }}">{{ post.title | remove: "RL 101 - " }}</a>

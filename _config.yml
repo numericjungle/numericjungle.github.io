@@ -3,10 +3,23 @@ url: 'https://numericjungle.github.io'
 description: "Notes from the Frontier"
 
 exclude:
+  - .bundle
   - vendor
+  - node_modules
+  - __pycache__
+  - .github
   - Gemfile
   - Gemfile.lock
   - README.md
+  - SETUP_DEV_ENVIRONMENT.md
+  - convert_math_delimiters.py
+  - new_post.py
+  - post.sh
+  - run-server.sh
+  - package.json
+  - package-lock.json
+  - scrapers
+  - tmp_rovodev_server_output.log
 
 markdown: kramdown
 kramdown:
@@ -27,4 +40,3 @@ sass:
     style: :compressed
 
 excerpt_separator: "<!--excerpt-->"
-

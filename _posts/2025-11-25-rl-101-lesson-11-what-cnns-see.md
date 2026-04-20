@@ -1,7 +1,7 @@
 ---
 date: 2025-11-25 09:00:00.000000
 layout: post
-title: "RL 101 - Lesson 11 - What CNNs Actually See"
+title: "Lesson 11 - What CNNs Actually See"
 description: "Train a CNN on CIFAR-10 in-browser and visualise what every layer learns — from pixel edges to object parts."
 tags: [deep learning, computer vision]
 comments: true
