@@ -1,0 +1,88 @@
+---
+layout: page
+title: CV Lab
+description: "Seven computer vision experiments you can run in your browser."
+permalink: /cv-lab/
+exclude_nav: true
+---
+
+<p class="cv-lab-intro">Seven labs taking you from basic image filters to CNN feature visualisation, each with a live in-browser demo powered by ConvNetJS and canvas.</p>
+
+<h2 class="cv-section-heading">Labs</h2>
+
+<ol class="cv-lesson-list">
+{% assign cv_posts = site.posts | where_exp: "post", "post.title contains 'CV Lab'" | sort: "date" %}
+{% for post in cv_posts %}
+  <li>
+    <a href="{{ post.url }}">{{ post.title | remove: "CV Lab " }}</a>
+    <span class="cv-date">{{ post.date | date: "%b %Y" }}</span>
+  </li>
+{% endfor %}
+</ol>
+
+<h2 class="cv-section-heading">Live Demos</h2>
+
+<div class="cv-demo-grid">
+  <a class="cv-demo-card" href="/train-deep-learning/cv-filters/" target="_blank" rel="noopener">
+    <span class="cv-demo-icon">&#x1F4D0;</span>
+    <span class="cv-demo-label">Image Filters</span>
+  </a>
+  <a class="cv-demo-card" href="/train-deep-learning/cv-mnist-train/" target="_blank" rel="noopener">
+    <span class="cv-demo-icon">&#x1F4CA;</span>
+    <span class="cv-demo-label">Digit Classifier</span>
+  </a>
+  <a class="cv-demo-card" href="/train-deep-learning/cv-sketch/" target="_blank" rel="noopener">
+    <span class="cv-demo-icon">&#x270D;</span>
+    <span class="cv-demo-label">Sketch &amp; Predict</span>
+  </a>
+  <a class="cv-demo-card" href="/train-deep-learning/cv-color-cluster/" target="_blank" rel="noopener">
+    <span class="cv-demo-icon">&#x1F308;</span>
+    <span class="cv-demo-label">Color Clustering</span>
+  </a>
+  <a class="cv-demo-card" href="/train-deep-learning/cv-augmentation/" target="_blank" rel="noopener">
+    <span class="cv-demo-icon">&#x1F3B2;</span>
+    <span class="cv-demo-label">Augmentation</span>
+  </a>
+  <a class="cv-demo-card" href="/train-deep-learning/cv-saliency/" target="_blank" rel="noopener">
+    <span class="cv-demo-icon">&#x1F50D;</span>
+    <span class="cv-demo-label">Saliency Maps</span>
+  </a>
+  <a class="cv-demo-card" href="/train-deep-learning/cnn-features/" target="_blank" rel="noopener">
+    <span class="cv-demo-icon">&#x1F441;</span>
+    <span class="cv-demo-label">What CNNs See</span>
+  </a>
+</div>
+
+<style>
+.cv-lab-intro { opacity: 0.75; margin-bottom: 1.5rem; }
+
+.cv-section-heading { margin-top: 2rem; padding-bottom: 0.3rem; border-bottom: 2px solid currentColor; opacity: 0.85; }
+
+.cv-lesson-list { padding-left: 1.2rem; }
+.cv-lesson-list li { padding: 0.35rem 0; display: flex; align-items: baseline; gap: 0.6rem; }
+.cv-lesson-list a { flex: 1; }
+.cv-date { font-size: 0.78rem; opacity: 0.5; white-space: nowrap; }
+
+.cv-demo-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+.cv-demo-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.9rem 0.5rem;
+  border: 1px solid currentColor;
+  border-radius: 10px;
+  text-decoration: none;
+  opacity: 0.75;
+  transition: opacity 0.15s;
+  text-align: center;
+}
+.cv-demo-card:hover { opacity: 1; }
+.cv-demo-icon { font-size: 1.6rem; }
+.cv-demo-label { font-size: 0.78rem; line-height: 1.3; }
+</style>

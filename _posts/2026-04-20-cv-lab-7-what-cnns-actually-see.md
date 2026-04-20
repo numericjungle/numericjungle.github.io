@@ -1,13 +1,13 @@
 ---
-date: 2025-11-25 09:00:00.000000
+date: 2026-04-20 12:00:00.000000
 layout: post
-title: "Lesson 11 - What CNNs Actually See"
+title: "CV Lab 7 - What CNNs Actually See"
 description: "Train a CNN on CIFAR-10 in-browser and visualise what every layer learns — from pixel edges to object parts."
 tags: [deep learning, computer vision]
 comments: true
 ---
 
-Ask a trained CNN to classify a photo and it will answer in milliseconds. Ask it *how* it reached that answer and the question gets harder. This lesson makes the internals visible: train a three-layer convnet on CIFAR-10 directly in your browser, then step through any test image and watch each layer's response light up.
+Ask a trained CNN to classify a photo and it will answer in milliseconds. Ask it *how* it reached that answer and the question gets harder. This lab makes the internals visible: train a three-layer convnet on CIFAR-10 directly in your browser, then step through any test image and watch each layer's response light up.
 
 <!--excerpt-->
 
@@ -75,4 +75,4 @@ These patterns emerge because CIFAR-10 images contain many edges and colour boun
 
 ---
 
-*Next: Lesson 12 — Transfer learning: reusing a pretrained backbone for a new task.*
+*Next: CV Lab 8 — Transfer learning: reusing a pretrained backbone for a new task.*

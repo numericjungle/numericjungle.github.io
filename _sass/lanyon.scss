@@ -190,6 +190,44 @@ a.sidebar-nav-item:focus {
   border-color: transparent;
 }
 
+/* Labs group label + subtabs */
+.sidebar-nav-group {
+  margin: 0;
+}
+.sidebar-nav-toggle {
+  cursor: pointer;
+  list-style: none;
+  position: relative;
+  padding-right: 2.5rem;
+}
+.sidebar-nav-toggle::-webkit-details-marker {
+  display: none;
+}
+.sidebar-nav-toggle::marker {
+  content: "";
+}
+.sidebar-nav-toggle::after {
+  content: "+";
+  position: absolute;
+  right: 1rem;
+  top: 50%;
+  transform: translateY(-50%);
+  opacity: .65;
+}
+.sidebar-nav-group[open] > .sidebar-nav-toggle::after {
+  content: "−";
+}
+.sidebar-nav-group > .sidebar-nav-toggle:hover,
+.sidebar-nav-group > .sidebar-nav-toggle:focus {
+  text-decoration: none;
+  background-color: rgba(255,255,255,.1);
+  border-color: transparent;
+}
+.sidebar-nav-sub {
+  padding-left: 1.6rem;
+  font-size: .68rem;
+}
+
 @media (min-width: 48em) {
   .sidebar-item {
     padding: 1.5rem;
@@ -197,6 +235,15 @@ a.sidebar-nav-item:focus {
   .sidebar-nav-item {
     padding-left:  1.5rem;
     padding-right: 1.5rem;
+  }
+  .sidebar-nav-toggle {
+    padding-right: 3rem;
+  }
+  .sidebar-nav-toggle::after {
+    right: 1.5rem;
+  }
+  .sidebar-nav-sub {
+    padding-left: 2.1rem;
   }
 }
 
