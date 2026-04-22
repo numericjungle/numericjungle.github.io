@@ -6,8 +6,22 @@
     <description>Research posts from Anthropic</description>
     <language>en-US</language>
     <generator>numericjungle scrape_rss.py</generator>
-    <lastBuildDate>Wed, 22 Apr 2026 13:54:11 +0000</lastBuildDate>
+    <lastBuildDate>Wed, 22 Apr 2026 19:21:58 +0000</lastBuildDate>
     <atom:link href="https://numericjungle.github.io/feeds/anthropic-research.xml" rel="self" type="application/rss+xml"/>
+    <item>
+      <title>81K Economics</title>
+      <link>https://www.anthropic.com/research/81k-economics</link>
+      <guid isPermaLink="true">https://www.anthropic.com/research/81k-economics</guid>
+      <pubDate>Wed, 22 Apr 2026 14:12:30 +0000</pubDate>
+      <description>Economic Research What 81,000 people told us about the economics of AI Apr 22, 2026 Read the PDF Key findings: Our recent survey of 81,000 Claude users shows that people who work in roles that are more exposed to AI have more concerns about AI-driven job displacement. These concerns are also higher among early-career respondents. Those in the highest- and lowest-paid occupations report the largest productivity gains, most commonly from increases in scope (doing new tasks). Respondents...</description>
+    </item>
+    <item>
+      <title>Automated Alignment Researchers</title>
+      <link>https://www.anthropic.com/research/automated-alignment-researchers</link>
+      <guid isPermaLink="true">https://www.anthropic.com/research/automated-alignment-researchers</guid>
+      <pubDate>Tue, 14 Apr 2026 13:01:00 +0000</pubDate>
+      <description>Alignment Automated Alignment Researchers: Using large language models to scale scalable oversight Apr 14, 2026 Read the research Large language models’ ever-accelerating rate of improvement raises two particularly important questions for alignment research. One is how alignment can keep up. Frontier AI models are now contributing to the development of their successors. But can they provide the same kind of uplift for alignment researchers? Could our language models be used to help align...</description>
+    </item>
     <item>
       <title>Trustworthy Agents</title>
       <link>https://www.anthropic.com/research/trustworthy-agents</link>
@@ -209,14 +223,12 @@
       <link>https://www.anthropic.com/research/emergent-misalignment-reward-hacking</link>
       <guid isPermaLink="true">https://www.anthropic.com/research/emergent-misalignment-reward-hacking</guid>
       <pubDate>Fri, 21 Nov 2025 14:32:00 +0000</pubDate>
-      <description>Alignment From shortcuts to sabotage: natural emergent misalignment from reward hacking Nov 21, 2025 Read the paper In the latest research from Anthropic’s alignment team, we show for the first time that realistic AI training processes can accidentally produce misaligned models 1 . In Shakespeare’s King Lear , the character of Edmund commits a range of villainous acts: he forges letters, frames his brother, betrays his father, and eventually goes as far as having innocent people killed. He...</description>
     </item>
     <item>
       <title>Project Fetch Robot Dog</title>
       <link>https://www.anthropic.com/research/project-fetch-robot-dog</link>
       <guid isPermaLink="true">https://www.anthropic.com/research/project-fetch-robot-dog</guid>
       <pubDate>Wed, 12 Nov 2025 18:19:00 +0000</pubDate>
-      <description>Policy Frontier Red Team Project Fetch: Can Claude train a robot dog? Nov 12, 2025 How could frontier AI models like Claude reach beyond computers and affect the physical world? One path is through robots. We ran an experiment to see how much Claude helped Anthropic staff perform complex tasks with a robot dog. Gathered around a table in a warehouse, looking at computer screens with code that refused to work, with no access to their trusted AI assistant Claude, our volunteer researchers did...</description>
     </item>
     <item>
       <title>Deprecation Commitments</title>
