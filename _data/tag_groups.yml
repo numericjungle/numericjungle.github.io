@@ -32,9 +32,13 @@
     - chrome extension
     - spark
 
+- name: Mathematics
+  tags:
+    - queueing theory
+    - mathematics
+
 - name: Misc
   tags:
-    - mathematics
     - physics
     - book
     - podcast
