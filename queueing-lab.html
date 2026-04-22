@@ -1,0 +1,76 @@
+---
+layout: page
+title: Queueing Theory Lab
+description: "Three interactive labs covering M/M/1, M/M/c, and queue variants — simulate arrivals, service, and waiting in your browser."
+permalink: /queueing-lab/
+exclude_nav: true
+---
+
+<p class="ql-intro">Three labs taking you from a single-server M/M/1 queue through multi-server systems and key variants, each with a live animated in-browser simulation.</p>
+
+<h2 class="ql-heading">Labs</h2>
+
+<ol class="ql-list">
+{% assign q_posts = site.posts | where_exp: "post", "post.title contains 'Queueing Lab'" | sort: "date" %}
+{% for post in q_posts %}
+  <li>
+    <a href="{{ post.url }}">{{ post.title | remove: "Queueing Lab " }}</a>
+    <span class="ql-date">{{ post.date | date: "%b %Y" }}</span>
+  </li>
+{% endfor %}
+</ol>
+
+<h2 class="ql-heading">Live Demos</h2>
+
+<div class="ql-grid">
+  <a class="ql-card" href="/train-deep-learning/queue-mm1/" target="_blank" rel="noopener">
+    <span class="ql-icon">&#9711;</span>
+    <span class="ql-label">M/M/1 Queue</span>
+    <span class="ql-sub">Single server</span>
+  </a>
+  <a class="ql-card" href="/train-deep-learning/queue-mmc/" target="_blank" rel="noopener">
+    <span class="ql-icon">&#9776;</span>
+    <span class="ql-label">M/M/c Queue</span>
+    <span class="ql-sub">Multi-server + Erlang C</span>
+  </a>
+  <a class="ql-card" href="/train-deep-learning/queue-variants/" target="_blank" rel="noopener">
+    <span class="ql-icon">&#9654;</span>
+    <span class="ql-label">Queue Variants</span>
+    <span class="ql-sub">M/M/1/K · M/D/1 · M/G/1</span>
+  </a>
+</div>
+
+<style>
+.ql-intro { opacity: 0.75; margin-bottom: 1.5rem; }
+
+.ql-heading { margin-top: 2rem; padding-bottom: 0.3rem; border-bottom: 2px solid currentColor; opacity: 0.85; }
+
+.ql-list { padding-left: 1.2rem; }
+.ql-list li { padding: 0.35rem 0; display: flex; align-items: baseline; gap: 0.6rem; }
+.ql-list a { flex: 1; }
+.ql-date { font-size: 0.78rem; opacity: 0.5; white-space: nowrap; }
+
+.ql-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+.ql-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 1rem 0.5rem;
+  border: 1px solid currentColor;
+  border-radius: 10px;
+  text-decoration: none;
+  opacity: 0.75;
+  transition: opacity 0.15s;
+  text-align: center;
+}
+.ql-card:hover { opacity: 1; }
+.ql-icon { font-size: 1.8rem; }
+.ql-label { font-size: 0.85rem; font-weight: 600; line-height: 1.3; }
+.ql-sub { font-size: 0.72rem; opacity: 0.6; line-height: 1.3; }
+</style>

@@ -25,21 +25,22 @@
     {% for node in pages_list %}
       {% if node.title != null %}
         {% if node.layout == "page" %}
-          {% if node.url != '/rl-lab/' %}{% if node.url != '/cv-lab/' %}
+          {% if node.url != '/rl-lab/' %}{% if node.url != '/cv-lab/' %}{% if node.url != '/queueing-lab/' %}
             <a class="sidebar-nav-item{% if page.url == node.url %} active{% endif %}" href="{{ node.url }}">{{ node.title }}</a>
-          {% endif %}{% endif %}
+          {% endif %}{% endif %}{% endif %}
         {% endif %}
       {% endif %}
     {% endfor %}
 
     {% assign labs_open = false %}
-    {% if page.url == '/rl-lab/' or page.url == '/cv-lab/' %}
+    {% if page.url == '/rl-lab/' or page.url == '/cv-lab/' or page.url == '/queueing-lab/' %}
       {% assign labs_open = true %}
     {% endif %}
     <details class="sidebar-nav-group"{% if labs_open %} open{% endif %}>
       <summary class="sidebar-nav-item sidebar-nav-toggle{% if labs_open %} active{% endif %}">Labs</summary>
       <a class="sidebar-nav-item sidebar-nav-sub{% if page.url == '/rl-lab/' %} active{% endif %}" href="/rl-lab/">Reinforcement Learning</a>
       <a class="sidebar-nav-item sidebar-nav-sub{% if page.url == '/cv-lab/' %} active{% endif %}" href="/cv-lab/">Computer Vision</a>
+      <a class="sidebar-nav-item sidebar-nav-sub{% if page.url == '/queueing-lab/' %} active{% endif %}" href="/queueing-lab/">Queueing Theory</a>
     </details>
 
   <a class="sidebar-nav-item{% if page.url == site.url %} active{% endif %}" 

@@ -1,0 +1,429 @@
+---
+layout: embed
+title: Queueing Lab 3 – Queue Variants
+permalink: /train-deep-learning/queue-variants/
+---
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:system-ui,sans-serif;background:#0d0d1a;color:#ccc;padding:10px}
+#q3{max-width:760px;margin:0 auto}
+.tabs{display:flex;gap:4px;margin-bottom:8px}
+.tab{flex:1;padding:7px;background:#141426;border:1px solid #2a2a48;border-radius:6px;color:#888;cursor:pointer;font-size:12px;font-weight:600;text-align:center;transition:all .15s}
+.tab.on{background:#1a1a40;border-color:#7ec8ff;color:#7ec8ff}
+.ctrl{display:flex;flex-wrap:wrap;gap:12px;align-items:center;background:#141426;border-radius:8px;padding:10px 14px;margin-bottom:6px}
+.sg{display:flex;flex-direction:column;gap:3px;min-width:140px}
+.sg label{font-size:12px;color:#888}
+.sg label b{color:#7ec8ff}
+input[type=range]{width:100%;accent-color:#7ec8ff}
+.vc{display:flex;flex-wrap:wrap;gap:10px;align-items:center;background:#0f1020;border-radius:8px;padding:8px 12px;margin-bottom:6px;min-height:42px}
+.vc label{font-size:12px;color:#aaa}
+.vc b{color:#f0c040}
+.vc select{background:#141426;border:1px solid #3a3a60;color:#ccc;border-radius:4px;padding:3px 8px;font-size:12px}
+.badge{background:#101830;border:1px solid #f0c040;color:#f0c040;border-radius:5px;padding:4px 10px;font-size:13px}
+.btn{background:transparent;border:1px solid #7ec8ff88;color:#7ec8ffbb;border-radius:5px;padding:5px 14px;cursor:pointer;font-size:12px}
+.btn:hover{border-color:#7ec8ff;color:#7ec8ff}
+#q3-cv{display:block;width:100%;border-radius:8px;margin:6px 0}
+.legend{display:flex;gap:12px;flex-wrap:wrap;font-size:11px;margin-bottom:4px}
+.li{display:flex;align-items:center;gap:5px}
+.dot{width:10px;height:10px;border-radius:50%}
+.sbox{background:#141426;border-radius:8px;padding:10px 14px;overflow-x:auto}
+.sbox table{width:100%;border-collapse:collapse;font-size:12px;min-width:420px}
+.sbox th,.sbox td{padding:5px 8px;text-align:center;border-bottom:1px solid #1e1e38}
+.sbox th{font-size:11px}
+.sbox td:first-child{text-align:left;color:#888}
+.th{color:#f0c040}.ob{color:#50dd80}.mm1{color:#7ec8ff88}
+</style>
+
+<div id="q3">
+  <div class="tabs">
+    <div class="tab on" id="tb-mmk" onclick="setVariant('mmk')">M/M/1/K — Finite Buffer</div>
+    <div class="tab" id="tb-md1" onclick="setVariant('md1')">M/D/1 — Deterministic</div>
+    <div class="tab" id="tb-mg1" onclick="setVariant('mg1')">M/G/1 — General Service</div>
+  </div>
+  <div class="ctrl">
+    <div class="sg">
+      <label>Arrivals λ = <b id="lv">0.50</b>/s</label>
+      <input type="range" id="sl" min="0.1" max="0.95" step="0.05" value="0.5">
+    </div>
+    <div class="sg">
+      <label>Service μ = <b id="mv">1.00</b>/s</label>
+      <input type="range" id="sm" min="0.5" max="3.0" step="0.1" value="1.0">
+    </div>
+    <div class="sg">
+      <label>Speed <b id="spv">3</b>×</label>
+      <input type="range" id="ss" min="1" max="20" step="1" value="3">
+    </div>
+    <div class="badge">&#961; = <span id="rlive">0.50</span></div>
+    <button class="btn" id="rst">&#8635; Reset</button>
+  </div>
+
+  <div class="vc" id="vc-mmk">
+    <div class="sg">
+      <label>Max queue K = <b id="kv">5</b></label>
+      <input type="range" id="sk" min="1" max="25" step="1" value="5">
+    </div>
+    <span style="font-size:12px;color:#aaa">Blocked: <b id="blocked" style="color:#ff8888">0</b></span>
+    <span style="font-size:12px;color:#aaa">P(block) theory: <b id="pbt" style="color:#f0c040">--</b></span>
+    <span style="font-size:12px;color:#aaa">observed: <b id="pbo" style="color:#50dd80">--</b></span>
+  </div>
+  <div class="vc" id="vc-md1" style="display:none">
+    <span style="font-size:12px;color:#aaa">Service time is always exactly <b style="color:#f0c040">1/&mu; (constant)</b>. Cs&sup2; = 0.</span>
+    <span style="font-size:12px;color:#aaa;margin-left:10px">Result: Lq = exactly <b style="color:#f0c040">half</b> of M/M/1!</span>
+  </div>
+  <div class="vc" id="vc-mg1" style="display:none">
+    <label style="font-size:12px;color:#aaa">Distribution:</label>
+    <select id="sdist">
+      <option value="det">Deterministic (Cs&#178;=0)</option>
+      <option value="erlang5">Erlang-5 (Cs&#178;=0.2)</option>
+      <option value="erlang2">Erlang-2 (Cs&#178;=0.5)</option>
+      <option value="exp" selected>Exponential (Cs&#178;=1)</option>
+      <option value="hyper">Hyper-exp (Cs&#178;&asymp;2.1)</option>
+    </select>
+    <span style="font-size:12px;color:#aaa">Cs&#178; = <b id="csv" style="color:#f0c040">1.0</b></span>
+  </div>
+
+  <div class="legend">
+    <div class="li"><div class="dot" style="background:#5599ff"></div>Arriving</div>
+    <div class="li"><div class="dot" style="background:#f0c040"></div>Waiting</div>
+    <div class="li"><div class="dot" style="background:#50dd80"></div>Serving</div>
+    <div class="li"><div class="dot" style="background:#888"></div>Departing</div>
+    <div class="li"><div class="dot" style="background:#ff5555"></div>Blocked</div>
+  </div>
+  <canvas id="q3-cv" width="760" height="320"></canvas>
+  <div class="sbox">
+    <table>
+      <tr><th>Metric</th><th class="th">This Model</th><th class="mm1">M/M/1 Ref</th><th class="ob">Observed</th></tr>
+      <tr><td>rho -- server utilisation</td><td class="th" id="tr">--</td><td class="mm1" id="tr1">--</td><td class="ob" id="or">--</td></tr>
+      <tr><td>Lq -- avg queue length</td><td class="th" id="tLq">--</td><td class="mm1" id="tLq1">--</td><td class="ob" id="oLq">--</td></tr>
+      <tr><td>Wq -- avg wait time (s)</td><td class="th" id="tWq">--</td><td class="mm1" id="tWq1">--</td><td class="ob" id="oWq">--</td></tr>
+      <tr><td>W -- avg system time (s)</td><td class="th" id="tW">--</td><td class="mm1" id="tW1">--</td><td class="ob" id="oW">--</td></tr>
+      <tr><td id="extra-label">--</td><td class="th" id="extra-t">--</td><td class="mm1">--</td><td class="ob" id="extra-o">--</td></tr>
+    </table>
+  </div>
+</div>
+
+<script>
+const cv = document.getElementById('q3-cv');
+const cx = cv.getContext('2d');
+const W = cv.width, H = cv.height;
+const SH = 235, CY = SH / 2;
+const SRV_X = 682, SRV_W = 64, SRV_H = 54, SRV_Y = CY;
+const QFX = SRV_X - SRV_W / 2 - 18;
+const SLOT = 26, CR = 13;
+const COL = { arriving:'#5599ff', waiting:'#f0c040', serving:'#50dd80', departing:'#888', blocked:'#ff5555' };
+const CS2 = { det:0, erlang5:0.2, erlang2:0.5, exp:1.0, hyper:2.1 };
+
+let variant = 'mmk';
+let lam=0.5, mu=1.0, spd=3, K=5, sdist='exp';
+let simT, nxtArr, cid, q, srv, custs, deps, blockedCount, totalArrivals;
+let busyT, areaNq, totW, totS;
+let hist = new Array(200).fill(0), lastHistT=0, lastReal=null;
+
+function rexp(r){ return -Math.log(Math.random()+1e-12)/r; }
+
+function svcTime(){
+  if(variant==='md1') return 1/mu;
+  if(variant==='mmk') return rexp(mu);
+  switch(sdist){
+    case 'det':    return 1/mu;
+    case 'erlang2': return rexp(2*mu)+rexp(2*mu);
+    case 'erlang5': return rexp(5*mu)+rexp(5*mu)+rexp(5*mu)+rexp(5*mu)+rexp(5*mu);
+    case 'hyper':  return Math.random()<0.2 ? rexp(0.4*mu) : rexp(1.6*mu);
+    default:       return rexp(mu);
+  }
+}
+
+function init(){
+  simT=0; nxtArr=rexp(lam); cid=0;
+  q=[]; srv=null; custs=[]; deps=[];
+  blockedCount=0; totalArrivals=0;
+  busyT=0; areaNq=0; totW=0; totS=0;
+  hist.fill(0); lastHistT=0; lastReal=null;
+}
+
+function mkC(){ return {id:cid++,arrT:simT,svcS:0,svcE:0,x:-CR*2,y:CY,tx:0,ty:CY,op:1,state:'arriving'}; }
+
+function setTargets(){
+  if(srv){ srv.tx=SRV_X; srv.ty=SRV_Y; }
+  q.forEach((c,i)=>{ c.tx=QFX-i*SLOT; c.ty=CY; });
+  custs.filter(c=>c.state==='departing').forEach(c=>{ c.tx=W+60; c.ty=SRV_Y; });
+  // blocked stay at their own negative target (set when created)
+}
+
+function advTA(dt){ areaNq+=q.length*dt; if(srv) busyT+=dt; }
+
+function stepSim(target){
+  let iter=0;
+  while(iter++<4000){
+    let ne=target, et='none';
+    if(nxtArr<ne){ ne=nxtArr; et='arr'; }
+    if(srv&&srv.svcE<ne){ ne=srv.svcE; et='dep'; }
+    if(ne>=target) break;
+    advTA(ne-simT); simT=ne;
+    if(et==='arr'){
+      totalArrivals++;
+      const c=mkC(); custs.push(c);
+      const full=(variant==='mmk'&&q.length>=K);
+      if(full){
+        c.state='blocked'; blockedCount++;
+        c.tx=-60; c.ty=CY; // bounce back left
+      } else if(!srv){
+        c.state='serving'; c.svcS=simT; c.svcE=simT+svcTime(); srv=c;
+      } else {
+        c.state='waiting'; q.push(c);
+      }
+      nxtArr=simT+rexp(lam);
+    } else {
+      const c=srv; c.state='departing';
+      totS+=simT-c.arrT; totW+=c.svcS-c.arrT;
+      deps.push(c); srv=null;
+      if(q.length>0){
+        const nx=q.shift();
+        nx.state='serving'; nx.svcS=simT; nx.svcE=simT+svcTime(); srv=nx;
+      }
+    }
+  }
+  advTA(target-simT); simT=target;
+  setTargets();
+}
+
+function animPos(dt){
+  const v=Math.max(220,65*spd);
+  for(const c of custs){
+    const dx=c.tx-c.x, dy=c.ty-c.y;
+    const d=Math.hypot(dx,dy), s=v*dt;
+    if(d<s){ c.x=c.tx; c.y=c.ty; }
+    else { c.x+=dx/d*s; c.y+=dy/d*s; }
+    if(c.state==='departing'||c.state==='blocked') c.op=Math.max(0,c.op-dt*1.4);
+  }
+  custs=custs.filter(c=>{
+    if((c.state==='departing'||c.state==='blocked')&&c.op<=0) return false;
+    return true;
+  });
+}
+
+function arrow(x,y,col){
+  cx.fillStyle=col;
+  cx.beginPath(); cx.moveTo(x,y); cx.lineTo(x-10,y-5); cx.lineTo(x-10,y+5); cx.fill();
+}
+
+function drawC(c){
+  cx.save(); cx.globalAlpha=c.op;
+  const col=COL[c.state]||'#888';
+  cx.shadowColor=col; cx.shadowBlur=7;
+  cx.fillStyle=col;
+  cx.beginPath(); cx.arc(c.x,c.y,CR,0,Math.PI*2); cx.fill();
+  cx.shadowBlur=0; cx.fillStyle='#000';
+  cx.font='bold '+(CR-2)+'px monospace';
+  cx.textAlign='center'; cx.textBaseline='middle';
+  cx.fillText(String(c.id%100),c.x,c.y);
+  cx.restore();
+}
+
+function mmkStats(ll,mm,kk){
+  const N=kk+1; // max system size (K in queue + 1 in service)
+  const rho=ll/mm;
+  let pb, L, Lq, W, Wq;
+  if(Math.abs(rho-1)<1e-9){
+    pb=1/(N+1);
+    L=0; for(let n=0;n<=N;n++) L+=n/(N+1);
+  } else {
+    const p0=(1-rho)/(1-Math.pow(rho,N+1));
+    pb=p0*Math.pow(rho,N);
+    L=0; for(let n=0;n<=N;n++) L+=n*p0*Math.pow(rho,n);
+  }
+  const lamEff=ll*(1-pb);
+  Lq=Math.max(0,L-lamEff/mm);
+  W=lamEff>0?L/lamEff:0; Wq=lamEff>0?Lq/lamEff:0;
+  return{pb,L,Lq,W,Wq};
+}
+
+function draw(){
+  cx.clearRect(0,0,W,H);
+  cx.fillStyle='#0d0d1a'; cx.fillRect(0,0,W,H);
+  const QL=26, QR=QFX;
+
+  // Queue lane
+  cx.strokeStyle='#1b1b38'; cx.lineWidth=1;
+  cx.strokeRect(QL,CY-CR-14,QR-QL,(CR+14)*2);
+  cx.strokeStyle='#242446'; cx.lineWidth=1.5; cx.setLineDash([4,5]);
+  cx.beginPath(); cx.moveTo(QL,CY); cx.lineTo(QR,CY); cx.stroke();
+  cx.setLineDash([]);
+
+  // Buffer limit for M/M/1/K
+  if(variant==='mmk'){
+    const bx=QFX-K*SLOT-4, by=CY-CR-14, bw=K*SLOT+4, bh=(CR+14)*2;
+    cx.strokeStyle='#ff555533'; cx.lineWidth=2; cx.setLineDash([3,4]);
+    cx.strokeRect(bx,by,bw,bh); cx.setLineDash([]);
+    cx.fillStyle='#ff555533'; cx.font='10px sans-serif';
+    cx.textAlign='center'; cx.textBaseline='bottom';
+    cx.fillText('K='+K+' max queue',bx+bw/2,by-2);
+  }
+
+  cx.strokeStyle='#5599ff'; cx.lineWidth=2;
+  cx.beginPath(); cx.moveTo(4,CY); cx.lineTo(QL,CY); cx.stroke();
+  arrow(QL,CY,'#5599ff');
+  cx.fillStyle='#5599ff88'; cx.font='11px sans-serif';
+  cx.textAlign='center'; cx.textBaseline='bottom';
+  cx.fillText('λ',(4+QL)/2,CY-2);
+  cx.fillStyle='#f0c04055'; cx.font='10px sans-serif';
+  cx.textAlign='center'; cx.textBaseline='bottom';
+  cx.fillText('QUEUE',(QL+QR)/2,CY-CR-16);
+
+  // Server
+  const sl=SRV_X-SRV_W/2, st=SRV_Y-SRV_H/2;
+  if(srv){ cx.shadowColor='#50dd80'; cx.shadowBlur=14; }
+  cx.strokeStyle=srv?'#50dd80':'#253225'; cx.lineWidth=2;
+  cx.strokeRect(sl,st,SRV_W,SRV_H); cx.shadowBlur=0;
+  cx.fillStyle='#0a180a'; cx.fillRect(sl+1,st+1,SRV_W-2,SRV_H-2);
+  cx.fillStyle=srv?'#50dd80aa':'#2a3a2a'; cx.font='10px sans-serif';
+  cx.textAlign='center'; cx.textBaseline='bottom';
+  cx.fillText('SERVER',SRV_X,st-4);
+  cx.textBaseline='top'; cx.fillStyle='#50dd8066';
+  cx.fillText('μ',SRV_X,st+SRV_H+4);
+
+  // Service progress bar for M/D/1
+  if(variant==='md1'&&srv){
+    const elapsed=simT-srv.svcS;
+    const prog=Math.max(0,Math.min(1,elapsed*mu));
+    cx.fillStyle='#1a2a1a'; cx.fillRect(sl+3,st+SRV_H-10,SRV_W-6,7);
+    cx.fillStyle='#50dd80'; cx.fillRect(sl+3,st+SRV_H-10,(SRV_W-6)*prog,7);
+  }
+
+  const ex=SRV_X+SRV_W/2+3;
+  cx.strokeStyle='#666'; cx.lineWidth=2;
+  cx.beginPath(); cx.moveTo(ex,SRV_Y); cx.lineTo(ex+26,SRV_Y); cx.stroke();
+  arrow(ex+26,SRV_Y,'#666');
+
+  custs.forEach(drawC);
+
+  // HUD
+  cx.fillStyle='#444'; cx.font='11px monospace';
+  cx.textAlign='left'; cx.textBaseline='top';
+  cx.fillText('t='+simT.toFixed(0)+'s  in:'+totalArrivals+'  out:'+deps.length,8,6);
+  cx.fillStyle='#f0c040'; cx.font='bold 12px sans-serif';
+  cx.textAlign='right'; cx.fillText('Q: '+q.length,W-8,6);
+  if(variant==='mmk'&&blockedCount>0){
+    cx.fillStyle='#ff5555'; cx.font='12px sans-serif';
+    cx.textAlign='right'; cx.textBaseline='top';
+    cx.fillText('Blocked: '+blockedCount,W-8,22);
+  }
+
+  // Chart
+  const CTop=SH+5, CBot=H-8, CL=40, CR2=W-8;
+  cx.fillStyle='#080816'; cx.fillRect(CL,CTop,CR2-CL,CBot-CTop);
+  cx.fillStyle='#333'; cx.font='10px sans-serif';
+  cx.textAlign='left'; cx.textBaseline='top';
+  cx.fillText('Queue length Nq(t)',CL+3,CTop+2);
+  const mx=Math.max(8,...hist);
+  cx.strokeStyle='#f0c040'; cx.lineWidth=1.3;
+  cx.beginPath();
+  hist.forEach((v,i)=>{
+    const px=CL+(i/(hist.length-1))*(CR2-CL);
+    const py=CBot-((v/mx)*(CBot-CTop-10));
+    i===0?cx.moveTo(px,py):cx.lineTo(px,py);
+  });
+  cx.stroke();
+
+  const rho=lam/mu;
+  if(rho<1){
+    let Lqt=null;
+    if(variant==='md1') Lqt=rho*rho/(2*(1-rho));
+    else if(variant==='mg1'){ const cs2=CS2[sdist]; Lqt=rho*rho*(1+cs2)/(2*(1-rho)); }
+    if(Lqt!==null&&Lqt<mx*1.5){
+      const py=CBot-((Lqt/mx)*(CBot-CTop-10));
+      cx.strokeStyle='#f0c04044'; cx.lineWidth=1; cx.setLineDash([3,5]);
+      cx.beginPath(); cx.moveTo(CL,py); cx.lineTo(CR2,py); cx.stroke(); cx.setLineDash([]);
+      cx.fillStyle='#f0c04088'; cx.textAlign='right'; cx.textBaseline='bottom';
+      cx.fillText('Lq='+Lqt.toFixed(2),CR2,py-1);
+    }
+    const Lq1=rho*rho/(1-rho);
+    if(Lq1<mx*1.5){
+      const py=CBot-((Lq1/mx)*(CBot-CTop-10));
+      cx.strokeStyle='#7ec8ff22'; cx.lineWidth=1; cx.setLineDash([2,6]);
+      cx.beginPath(); cx.moveTo(CL,py); cx.lineTo(CR2,py); cx.stroke(); cx.setLineDash([]);
+      cx.fillStyle='#7ec8ff44'; cx.textAlign='left'; cx.textBaseline='bottom';
+      cx.fillText('M/M/1 Lq='+Lq1.toFixed(2),CL+2,py-1);
+    }
+  }
+}
+
+function updStats(){
+  if(simT<1) return;
+  const s=(id,v)=>document.getElementById(id).textContent=v;
+  const rho=lam/mu;
+  if(rho<1){
+    s('tr1',rho.toFixed(3)); s('tLq1',(rho*rho/(1-rho)).toFixed(2));
+    s('tWq1',(lam/(mu*(mu-lam))).toFixed(2)); s('tW1',(1/(mu-lam)).toFixed(2));
+  } else ['tr1','tLq1','tWq1','tW1'].forEach(id=>s(id,'inf'));
+
+  if(variant==='mmk'){
+    const st=mmkStats(lam,mu,K);
+    s('tr',rho.toFixed(3)); s('tLq',st.Lq.toFixed(2));
+    s('tWq',st.Wq.toFixed(2)); s('tW',st.W.toFixed(2));
+    s('extra-label','P(block)'); s('extra-t',(st.pb*100).toFixed(1)+'%');
+    s('pbt',(st.pb*100).toFixed(1)+'%');
+    s('pbo',totalArrivals>0?((blockedCount/totalArrivals)*100).toFixed(1)+'%':'--');
+    document.getElementById('blocked').textContent=blockedCount;
+  } else if(variant==='md1'){
+    if(rho<1){
+      const Lq=rho*rho/(2*(1-rho)), Wq=Lq/lam, W2=Wq+1/mu;
+      s('tr',rho.toFixed(3)); s('tLq',Lq.toFixed(2));
+      s('tWq',Wq.toFixed(2)); s('tW',W2.toFixed(2));
+    } else ['tr','tLq','tWq','tW'].forEach(id=>s(id,'inf'));
+    s('extra-label','Lq vs M/M/1 ratio'); s('extra-t','0.50x');
+  } else {
+    const cs2=CS2[sdist];
+    if(rho<1){
+      const Lq=rho*rho*(1+cs2)/(2*(1-rho)), Wq=Lq/lam, W2=Wq+1/mu;
+      s('tr',rho.toFixed(3)); s('tLq',Lq.toFixed(2));
+      s('tWq',Wq.toFixed(2)); s('tW',W2.toFixed(2));
+    } else ['tr','tLq','tWq','tW'].forEach(id=>s(id,'inf'));
+    s('extra-label','Cs^2 (service variability)'); s('extra-t',cs2.toFixed(1));
+    document.getElementById('csv').textContent=cs2.toFixed(1);
+  }
+
+  s('or',(busyT/simT).toFixed(3));
+  s('oLq',(areaNq/simT).toFixed(2));
+  if(deps.length>3){ s('oW',(totS/deps.length).toFixed(2)); s('oWq',(totW/deps.length).toFixed(2)); }
+  document.getElementById('rlive').textContent=rho.toFixed(2);
+}
+
+function setVariant(v){
+  variant=v;
+  ['mmk','md1','mg1'].forEach(id=>{
+    document.getElementById('tb-'+id).className='tab'+(id===v?' on':'');
+    document.getElementById('vc-'+id).style.display=id===v?'flex':'none';
+  });
+  init();
+}
+
+function frame(t){
+  const ts=t/1000;
+  if(lastReal===null) lastReal=ts;
+  const rdt=Math.min(ts-lastReal,0.1); lastReal=ts;
+  stepSim(simT+rdt*spd);
+  animPos(rdt);
+  if(simT-lastHistT>0.4){ hist.shift(); hist.push(q.length); lastHistT=simT; }
+  updStats(); draw();
+  requestAnimationFrame(frame);
+}
+
+function sync(){
+  lam=+document.getElementById('sl').value;
+  mu=+document.getElementById('sm').value;
+  spd=+document.getElementById('ss').value;
+  K=+document.getElementById('sk').value;
+  sdist=document.getElementById('sdist').value;
+  const s=(id,v)=>document.getElementById(id).textContent=v;
+  s('lv',lam.toFixed(2)); s('mv',mu.toFixed(2)); s('spv',spd); s('kv',K);
+  s('rlive',(lam/mu).toFixed(2)); s('csv',(CS2[sdist]||1).toFixed(1));
+  nxtArr=simT+rexp(lam);
+}
+
+['sl','sm','ss','sk'].forEach(id=>document.getElementById(id).addEventListener('input',sync));
+document.getElementById('sdist').addEventListener('change',()=>{ sdist=document.getElementById('sdist').value; init(); });
+document.getElementById('rst').addEventListener('click',init);
+
+init(); requestAnimationFrame(frame);
+</script>

@@ -1,0 +1,353 @@
+---
+layout: embed
+title: Queueing Lab 2 – M/M/c Multi-Server Queue
+permalink: /train-deep-learning/queue-mmc/
+---
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:system-ui,sans-serif;background:#0d0d1a;color:#ccc;padding:10px}
+#q2{max-width:760px;margin:0 auto}
+.ctrl{display:flex;flex-wrap:wrap;gap:12px;align-items:center;background:#141426;border-radius:8px;padding:10px 14px;margin-bottom:8px}
+.sg{display:flex;flex-direction:column;gap:3px;min-width:140px}
+.sg label{font-size:12px;color:#888}
+.sg label b{color:#7ec8ff}
+input[type=range]{width:100%;accent-color:#7ec8ff}
+.badges{display:flex;gap:8px;flex-wrap:wrap}
+.badge{background:#101830;border:1px solid #f0c040;color:#f0c040;border-radius:5px;padding:4px 10px;font-size:13px}
+.badge.g{border-color:#50dd80;color:#50dd80}
+.btn{background:transparent;border:1px solid #7ec8ff88;color:#7ec8ffbb;border-radius:5px;padding:5px 14px;cursor:pointer;font-size:12px}
+.btn:hover{border-color:#7ec8ff;color:#7ec8ff}
+#q2-cv{display:block;width:100%;border-radius:8px;margin:6px 0}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:11px;margin-bottom:4px}
+.li{display:flex;align-items:center;gap:5px}
+.dot{width:10px;height:10px;border-radius:50%}
+.sbox{background:#141426;border-radius:8px;padding:10px 14px;overflow-x:auto;margin-top:8px}
+.sbox table{width:100%;border-collapse:collapse;font-size:12px;min-width:460px}
+.sbox th,.sbox td{padding:5px 8px;text-align:center;border-bottom:1px solid #1e1e38}
+.sbox th{font-size:11px}
+.sbox td:first-child{text-align:left;color:#888}
+.th{color:#f0c040}.ob{color:#50dd80}.mm1{color:#7ec8ff}
+</style>
+
+<div id="q2">
+  <div class="ctrl">
+    <div class="sg">
+      <label>Arrivals λ = <b id="lv">0.60</b>/s</label>
+      <input type="range" id="sl" min="0.1" max="0.95" step="0.05" value="0.6">
+    </div>
+    <div class="sg">
+      <label>Service μ = <b id="mv">1.00</b>/s</label>
+      <input type="range" id="sm" min="0.5" max="3.0" step="0.1" value="1.0">
+    </div>
+    <div class="sg">
+      <label>Servers c = <b id="cv2">2</b></label>
+      <input type="range" id="sc" min="1" max="8" step="1" value="2">
+    </div>
+    <div class="sg">
+      <label>Speed <b id="spv">3</b>×</label>
+      <input type="range" id="ss" min="1" max="20" step="1" value="3">
+    </div>
+    <div class="badges">
+      <div class="badge">ρ = <span id="rlive">0.30</span></div>
+      <div class="badge g">C(c,A) = <span id="eclive">—</span></div>
+    </div>
+    <button class="btn" id="rst">↺ Reset</button>
+  </div>
+  <div class="legend">
+    <div class="li"><div class="dot" style="background:#5599ff"></div>Arriving</div>
+    <div class="li"><div class="dot" style="background:#f0c040"></div>Waiting</div>
+    <div class="li"><div class="dot" style="background:#50dd80"></div>Serving</div>
+    <div class="li"><div class="dot" style="background:#888"></div>Departing</div>
+  </div>
+  <canvas id="q2-cv" width="760" height="340"></canvas>
+  <div class="sbox">
+    <table>
+      <tr><th>Metric</th><th class="th">M/M/c Theory</th><th class="mm1">M/M/1 Theory</th><th class="ob">Observed</th></tr>
+      <tr><td>ρ per server</td><td class="th" id="tr">—</td><td class="mm1" id="tr1">—</td><td class="ob" id="or">—</td></tr>
+      <tr><td>P(wait) — Erlang C</td><td class="th" id="tec">—</td><td class="mm1" id="tec1">—</td><td class="ob" id="oec">—</td></tr>
+      <tr><td>Lq — avg queue length</td><td class="th" id="tLq">—</td><td class="mm1" id="tLq1">—</td><td class="ob" id="oLq">—</td></tr>
+      <tr><td>Wq — avg wait time (s)</td><td class="th" id="tWq">—</td><td class="mm1" id="tWq1">—</td><td class="ob" id="oWq">—</td></tr>
+      <tr><td>W — avg system time (s)</td><td class="th" id="tW">—</td><td class="mm1" id="tW1">—</td><td class="ob" id="oW">—</td></tr>
+    </table>
+  </div>
+</div>
+
+<script>
+const cv = document.getElementById('q2-cv');
+const cx = cv.getContext('2d');
+const W = cv.width, H = cv.height;
+const CR = 11;
+const COL = { arriving: '#5599ff', waiting: '#f0c040', serving: '#50dd80', departing: '#888' };
+
+let lam = 0.6, mu = 1.0, c = 2, spd = 3;
+let simT, nxtArr, cid, q, srvs, srvFree, custs, deps;
+let areaNq, totW, totS, totWaited;
+let hist = new Array(200).fill(0), lastHistT = 0;
+let lastReal = null;
+
+function rexp(r) { return -Math.log(Math.random() + 1e-12) / r; }
+
+function srvPos(i) {
+  const sp = c > 1 ? Math.min(62, 270 / (c - 1)) : 0;
+  return { x: 660, y: H / 2 + (i - (c - 1) / 2) * sp };
+}
+
+function init() {
+  simT = 0; nxtArr = rexp(lam); cid = 0;
+  q = []; srvs = new Array(c).fill(null); srvFree = new Array(c).fill(Infinity);
+  custs = []; deps = []; areaNq = 0; totW = 0; totS = 0; totWaited = 0;
+  hist.fill(0); lastHistT = 0; lastReal = null;
+}
+
+function mkC() {
+  return { id: cid++, arrT: simT, svcS: 0, svcE: 0, srvIdx: -1,
+           x: -CR * 2, y: H / 2, tx: 0, ty: H / 2, op: 1, state: 'arriving' };
+}
+
+function setTargets() {
+  srvs.forEach((c2, i) => {
+    if (c2) { const p = srvPos(i); c2.tx = p.x; c2.ty = p.y; }
+  });
+  const QFX = srvPos(0).x - 40 - 12;
+  q.forEach((c2, i) => { c2.tx = QFX - i * 26; c2.ty = H / 2; });
+  custs.filter(c2 => c2.state === 'departing').forEach(c2 => { c2.tx = W + 60; c2.ty = c2.ty; });
+}
+
+function advTA(dt) {
+  areaNq += q.length * dt;
+}
+
+function stepSim(target) {
+  let iter = 0;
+  while (iter++ < 4000) {
+    let ne = target, et = 'none', ei = -1;
+    if (nxtArr < ne) { ne = nxtArr; et = 'arr'; }
+    srvFree.forEach((t, i) => { if (t < ne) { ne = t; et = 'dep'; ei = i; } });
+    if (ne >= target) break;
+    advTA(ne - simT); simT = ne;
+    if (et === 'arr') {
+      const c2 = mkC(); custs.push(c2);
+      const fi = srvs.findIndex(s => s === null);
+      if (fi >= 0) {
+        c2.state = 'serving'; c2.svcS = simT; c2.svcE = simT + rexp(mu);
+        c2.srvIdx = fi; srvs[fi] = c2; srvFree[fi] = c2.svcE;
+      } else {
+        c2.state = 'waiting'; q.push(c2);
+      }
+      nxtArr = simT + rexp(lam);
+    } else {
+      const c2 = srvs[ei];
+      c2.state = 'departing';
+      totS += simT - c2.arrT; totW += c2.svcS - c2.arrT;
+      if (c2.svcS > c2.arrT) totWaited++;
+      deps.push(c2); srvs[ei] = null; srvFree[ei] = Infinity;
+      if (q.length > 0) {
+        const nx = q.shift();
+        nx.state = 'serving'; nx.svcS = simT; nx.svcE = simT + rexp(mu);
+        nx.srvIdx = ei; srvs[ei] = nx; srvFree[ei] = nx.svcE;
+      }
+    }
+  }
+  advTA(target - simT); simT = target;
+  setTargets();
+}
+
+function animPos(dt) {
+  const v = Math.max(200, 65 * spd);
+  for (const c2 of custs) {
+    const dx = c2.tx - c2.x, dy = c2.ty - c2.y;
+    const d = Math.hypot(dx, dy), s = v * dt;
+    if (d < s) { c2.x = c2.tx; c2.y = c2.ty; }
+    else { c2.x += dx / d * s; c2.y += dy / d * s; }
+    if (c2.state === 'departing') c2.op = Math.max(0, c2.op - dt * 1.5);
+  }
+  custs = custs.filter(c2 => !(c2.state === 'departing' && c2.op <= 0));
+}
+
+function erlangC(cc, ll, mm) {
+  const A = ll / mm, rho = ll / (cc * mm);
+  if (rho >= 1) return 1;
+  let sum = 1, term = 1;
+  for (let n = 1; n < cc; n++) { term *= A / n; sum += term; }
+  const last = term * (A / cc) / (1 - rho);
+  return last / (sum + last);
+}
+
+function arrow(x, y, col) {
+  cx.fillStyle = col;
+  cx.beginPath(); cx.moveTo(x, y); cx.lineTo(x-10,y-5); cx.lineTo(x-10,y+5); cx.fill();
+}
+
+function drawC2(c2) {
+  cx.save(); cx.globalAlpha = c2.op;
+  cx.shadowColor = COL[c2.state]; cx.shadowBlur = 6;
+  cx.fillStyle = COL[c2.state];
+  cx.beginPath(); cx.arc(c2.x, c2.y, CR, 0, Math.PI * 2); cx.fill();
+  cx.shadowBlur = 0; cx.fillStyle = '#000';
+  cx.font = `bold ${CR - 2}px monospace`;
+  cx.textAlign = 'center'; cx.textBaseline = 'middle';
+  cx.fillText(String(c2.id % 100), c2.x, c2.y);
+  cx.restore();
+}
+
+function draw() {
+  cx.clearRect(0, 0, W, H);
+  cx.fillStyle = '#0d0d1a'; cx.fillRect(0, 0, W, H);
+
+  const SIM_H = H - 82;
+  const QFX = srvPos(0).x - 40 - 12;
+  const QL = 26;
+
+  // Queue lane
+  cx.strokeStyle = '#1b1b38'; cx.lineWidth = 1;
+  cx.strokeRect(QL, H/2 - CR - 14, QFX - QL, (CR + 14) * 2);
+  cx.strokeStyle = '#242446'; cx.lineWidth = 1.5; cx.setLineDash([4, 5]);
+  cx.beginPath(); cx.moveTo(QL, H/2); cx.lineTo(QFX, H/2); cx.stroke();
+  cx.setLineDash([]);
+
+  // Arrival arrow
+  cx.strokeStyle = '#5599ff'; cx.lineWidth = 2;
+  cx.beginPath(); cx.moveTo(4, H/2); cx.lineTo(QL, H/2); cx.stroke();
+  arrow(QL, H/2, '#5599ff');
+  cx.fillStyle = '#5599ff88'; cx.font = '11px sans-serif';
+  cx.textAlign = 'center'; cx.textBaseline = 'bottom';
+  cx.fillText('λ', (4+QL)/2, H/2-2);
+
+  cx.fillStyle = '#f0c04055'; cx.font = '10px sans-serif';
+  cx.textAlign = 'center'; cx.textBaseline = 'bottom';
+  cx.fillText('QUEUE', (QL + QFX) / 2, H/2 - CR - 15);
+
+  // Servers
+  for (let i = 0; i < c; i++) {
+    const p = srvPos(i);
+    const busy = srvs[i] !== null;
+    const sw = 58, sh = Math.min(46, (c > 1 ? 270/(c-1) : 50) - 6);
+    const sl = p.x - sw/2, st = p.y - sh/2;
+
+    if (busy) { cx.shadowColor = '#50dd80'; cx.shadowBlur = 10; }
+    cx.strokeStyle = busy ? '#50dd80' : '#253225'; cx.lineWidth = 1.5;
+    cx.strokeRect(sl, st, sw, sh);
+    cx.shadowBlur = 0;
+    cx.fillStyle = '#0a180a'; cx.fillRect(sl+1, st+1, sw-2, sh-2);
+
+    cx.fillStyle = busy ? '#50dd80aa' : '#2a3a2a';
+    cx.font = '9px sans-serif'; cx.textAlign = 'center'; cx.textBaseline = 'bottom';
+    cx.fillText(`S${i+1}`, p.x, st - 2);
+
+    // Connection line from queue to server
+    cx.strokeStyle = '#1e1e38'; cx.lineWidth = 1; cx.setLineDash([2,4]);
+    cx.beginPath(); cx.moveTo(QFX, H/2); cx.lineTo(sl, p.y); cx.stroke();
+    cx.setLineDash([]);
+
+    // Exit arrow per server
+    const ex = p.x + sw/2 + 2;
+    cx.strokeStyle = '#555'; cx.lineWidth = 1.5;
+    cx.beginPath(); cx.moveTo(ex, p.y); cx.lineTo(ex+20, p.y); cx.stroke();
+    arrow(ex+20, p.y, '#555');
+  }
+
+  // Customers
+  custs.forEach(drawC2);
+
+  // HUD
+  cx.fillStyle = '#444'; cx.font = '11px monospace';
+  cx.textAlign = 'left'; cx.textBaseline = 'top';
+  cx.fillText(`t=${simT.toFixed(0)}s  in:${cid}  out:${deps.length}`, 8, 6);
+  cx.fillStyle = '#f0c040'; cx.font = 'bold 12px sans-serif';
+  cx.textAlign = 'right'; cx.fillText(`Queue: ${q.length}`, W-8, 6);
+
+  // Chart
+  const CTop = SIM_H + 5, CBot = H - 8, CL = 40, CR2 = W - 8;
+  cx.fillStyle = '#080816'; cx.fillRect(CL, CTop, CR2-CL, CBot-CTop);
+  cx.fillStyle = '#333'; cx.font = '10px sans-serif';
+  cx.textAlign = 'left'; cx.textBaseline = 'top';
+  cx.fillText('Queue length Nq(t)', CL+3, CTop+2);
+  const mx = Math.max(5, ...hist);
+  cx.strokeStyle = '#f0c040'; cx.lineWidth = 1.3;
+  cx.beginPath();
+  hist.forEach((v, i) => {
+    const px = CL + (i/(hist.length-1))*(CR2-CL);
+    const py = CBot - ((v/mx)*(CBot-CTop-10));
+    i===0?cx.moveTo(px,py):cx.lineTo(px,py);
+  });
+  cx.stroke();
+
+  // Theoretical Lq line (M/M/c)
+  const rho = lam/(c*mu);
+  if (rho < 1) {
+    const ec = erlangC(c, lam, mu);
+    const Lq = lam * ec / (c*mu - lam);
+    if (Lq < mx*1.5) {
+      const py = CBot-((Lq/mx)*(CBot-CTop-10));
+      cx.strokeStyle='#50dd8055'; cx.lineWidth=1; cx.setLineDash([3,5]);
+      cx.beginPath(); cx.moveTo(CL,py); cx.lineTo(CR2,py); cx.stroke(); cx.setLineDash([]);
+      cx.fillStyle='#50dd8088'; cx.textAlign='right'; cx.textBaseline='bottom';
+      cx.fillText(`Lq(M/M/${c})=${Lq.toFixed(2)}`, CR2, py-1);
+    }
+  }
+}
+
+function updStats() {
+  if (simT < 1) return;
+  const s = (id, v) => document.getElementById(id).textContent = v;
+  const rho = lam / (c * mu);
+  const rho1 = lam / mu;
+  const ec = erlangC(c, lam, mu);
+
+  if (rho < 1) {
+    const Wq = ec / (c * mu - lam);
+    const Lq = lam * Wq;
+    const W = Wq + 1/mu;
+    s('tr', rho.toFixed(3)); s('tec', ec.toFixed(3));
+    s('tLq', Lq.toFixed(2)); s('tWq', Wq.toFixed(2)); s('tW', W.toFixed(2));
+  } else {
+    ['tr','tec','tLq','tWq','tW'].forEach(id => s(id,'∞'));
+  }
+  if (rho1 < 1) {
+    s('tr1', rho1.toFixed(3)); s('tec1', rho1.toFixed(3));
+    s('tLq1', (rho1*rho1/(1-rho1)).toFixed(2));
+    s('tWq1', (lam/(mu*(mu-lam))).toFixed(2));
+    s('tW1', (1/(mu-lam)).toFixed(2));
+  } else ['tr1','tec1','tLq1','tWq1','tW1'].forEach(id => s(id,'∞'));
+
+  const busyServers = srvs.filter(s2=>s2!==null).length;
+  s('or', (busyServers / c).toFixed(3));
+  s('oec', deps.length > 0 ? (totWaited / deps.length).toFixed(3) : '—');
+  s('oLq', (areaNq / simT).toFixed(2));
+  if (deps.length > 3) {
+    s('oW', (totS/deps.length).toFixed(2));
+    s('oWq', (totW/deps.length).toFixed(2));
+  }
+
+  document.getElementById('rlive').textContent = rho.toFixed(3);
+  document.getElementById('eclive').textContent = ec.toFixed(3);
+}
+
+function frame(t) {
+  const ts = t/1000;
+  if (lastReal===null) lastReal=ts;
+  const rdt = Math.min(ts-lastReal, 0.1);
+  lastReal = ts;
+  stepSim(simT + rdt * spd);
+  animPos(rdt);
+  if (simT - lastHistT > 0.4) { hist.shift(); hist.push(q.length); lastHistT=simT; }
+  updStats(); draw();
+  requestAnimationFrame(frame);
+}
+
+function sync() {
+  const s = (id,v) => document.getElementById(id).textContent=v;
+  lam=+document.getElementById('sl').value;
+  mu=+document.getElementById('sm').value;
+  const nc=+document.getElementById('sc').value;
+  spd=+document.getElementById('ss').value;
+  s('lv',lam.toFixed(2)); s('mv',mu.toFixed(2)); s('cv2',nc); s('spv',spd);
+  if(nc!==c){ c=nc; init(); return; }
+  nxtArr = simT + rexp(lam);
+}
+
+['sl','sm','sc','ss'].forEach(id => document.getElementById(id).addEventListener('input', sync));
+document.getElementById('rst').addEventListener('click', init);
+
+init(); requestAnimationFrame(frame);
+</script>

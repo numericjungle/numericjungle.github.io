@@ -1,0 +1,316 @@
+---
+layout: embed
+title: Queueing Lab 1 – M/M/1 Queue Simulator
+permalink: /train-deep-learning/queue-mm1/
+---
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:system-ui,sans-serif;background:#0d0d1a;color:#ccc;padding:10px}
+#q1{max-width:760px;margin:0 auto}
+.q1-ctrl{display:flex;flex-wrap:wrap;gap:12px;align-items:center;background:#141426;border-radius:8px;padding:10px 14px;margin-bottom:8px}
+.q1-sg{display:flex;flex-direction:column;gap:3px;min-width:145px}
+.q1-sg label{font-size:12px;color:#888}
+.q1-sg label b{color:#7ec8ff}
+input[type=range]{width:100%;accent-color:#7ec8ff}
+.badge{background:#101830;border:1px solid #f0c040;color:#f0c040;border-radius:5px;padding:4px 12px;font-size:14px}
+.btn{background:transparent;border:1px solid #7ec8ff88;color:#7ec8ffbb;border-radius:5px;padding:5px 14px;cursor:pointer;font-size:12px}
+.btn:hover{border-color:#7ec8ff;color:#7ec8ff}
+#q1-cv{display:block;width:100%;border-radius:8px;margin:6px 0}
+.warn{background:#3a0a0a;border:1px solid #ff5555;color:#ff8888;border-radius:6px;padding:6px 12px;font-size:12px;margin-bottom:6px;display:none}
+.warn.on{display:block}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:11px;margin-bottom:4px}
+.li{display:flex;align-items:center;gap:5px}
+.dot{width:10px;height:10px;border-radius:50%}
+.sbox{background:#141426;border-radius:8px;padding:10px 14px;overflow-x:auto}
+.sbox table{width:100%;border-collapse:collapse;font-size:12px;min-width:380px}
+.sbox th,.sbox td{padding:5px 8px;text-align:center;border-bottom:1px solid #1e1e38}
+.sbox th{font-size:11px}
+.sbox td:first-child{text-align:left;color:#888}
+.th{color:#f0c040}.ob{color:#50dd80}
+</style>
+
+<div id="q1">
+  <div class="q1-ctrl">
+    <div class="q1-sg">
+      <label>Arrivals λ = <b id="lv">0.50</b>/s</label>
+      <input type="range" id="sl" min="0.1" max="0.95" step="0.05" value="0.5">
+    </div>
+    <div class="q1-sg">
+      <label>Service μ = <b id="mv">1.00</b>/s</label>
+      <input type="range" id="sm" min="0.5" max="3.0" step="0.1" value="1.0">
+    </div>
+    <div class="q1-sg">
+      <label>Speed <b id="spv">3</b>×</label>
+      <input type="range" id="ss" min="1" max="20" step="1" value="3">
+    </div>
+    <div class="badge">ρ = <span id="rlive">0.50</span></div>
+    <button class="btn" id="rst">↺ Reset</button>
+  </div>
+  <div class="warn" id="warn">⚠ Unstable: λ ≥ μ (ρ ≥ 1). Queue grows without bound.</div>
+  <div class="legend">
+    <div class="li"><div class="dot" style="background:#5599ff"></div>Arriving</div>
+    <div class="li"><div class="dot" style="background:#f0c040"></div>Waiting</div>
+    <div class="li"><div class="dot" style="background:#50dd80"></div>Serving</div>
+    <div class="li"><div class="dot" style="background:#888"></div>Departing</div>
+  </div>
+  <canvas id="q1-cv" width="760" height="320"></canvas>
+  <div class="sbox">
+    <table>
+      <tr><th>Metric</th><th class="th">Theory (M/M/1)</th><th class="ob">Observed</th></tr>
+      <tr><td>ρ — server utilisation</td><td class="th" id="tr">—</td><td class="ob" id="or">—</td></tr>
+      <tr><td>L — avg customers in system</td><td class="th" id="tL">—</td><td class="ob" id="oL">—</td></tr>
+      <tr><td>Lq — avg queue length</td><td class="th" id="tLq">—</td><td class="ob" id="oLq">—</td></tr>
+      <tr><td>W — avg system time (s)</td><td class="th" id="tW">—</td><td class="ob" id="oW">—</td></tr>
+      <tr><td>Wq — avg wait time (s)</td><td class="th" id="tWq">—</td><td class="ob" id="oWq">—</td></tr>
+    </table>
+  </div>
+</div>
+
+<script>
+const cv = document.getElementById('q1-cv');
+const cx = cv.getContext('2d');
+const W = cv.width, H = cv.height;
+const SH = 235; // simulation zone height
+const CY = SH / 2;
+const SRV_X = 682, SRV_W = 64, SRV_H = 54, SRV_Y = CY;
+const QFX = SRV_X - SRV_W / 2 - 18; // queue front x
+const SLOT = 28; // px per queue slot
+const CR = 13;   // customer radius
+const COL = { arriving: '#5599ff', waiting: '#f0c040', serving: '#50dd80', departing: '#888' };
+
+let lam = 0.5, mu = 1.0, spd = 3;
+let simT, nxtArr, cid, q, srv, custs, deps;
+let busyT, areaN, areaNq, totW, totS;
+let hist = new Array(200).fill(0), lastHistT = 0;
+let lastReal = null;
+
+function rexp(r) { return -Math.log(Math.random() + 1e-12) / r; }
+
+function init() {
+  simT = 0; nxtArr = rexp(lam); cid = 0;
+  q = []; srv = null; custs = []; deps = [];
+  busyT = 0; areaN = 0; areaNq = 0; totW = 0; totS = 0;
+  hist.fill(0); lastHistT = 0; lastReal = null;
+}
+
+function mkC() {
+  return { id: cid++, arrT: simT, svcS: 0, svcE: 0,
+           x: -CR * 2, y: CY, tx: 0, ty: CY, op: 1, state: 'arriving' };
+}
+
+function setTargets() {
+  if (srv) { srv.tx = SRV_X; srv.ty = SRV_Y; }
+  q.forEach((c, i) => { c.tx = QFX - i * SLOT; c.ty = CY; });
+  custs.filter(c => c.state === 'departing').forEach(c => { c.tx = W + 60; c.ty = SRV_Y; });
+}
+
+function advTA(dt) {
+  areaN += (q.length + (srv ? 1 : 0)) * dt;
+  areaNq += q.length * dt;
+  if (srv) busyT += dt;
+}
+
+function stepSim(target) {
+  let iter = 0;
+  while (iter++ < 4000) {
+    let ne = target, et = 'none';
+    if (nxtArr < ne) { ne = nxtArr; et = 'arr'; }
+    if (srv && srv.svcE < ne) { ne = srv.svcE; et = 'dep'; }
+    if (ne >= target) break;
+    advTA(ne - simT); simT = ne;
+    if (et === 'arr') {
+      const c = mkC();
+      custs.push(c);
+      if (!srv) {
+        c.state = 'serving'; c.svcS = simT; c.svcE = simT + rexp(mu); srv = c;
+      } else {
+        c.state = 'waiting'; q.push(c);
+      }
+      nxtArr = simT + rexp(lam);
+    } else {
+      const c = srv;
+      c.state = 'departing';
+      totS += simT - c.arrT; totW += c.svcS - c.arrT;
+      deps.push(c); srv = null;
+      if (q.length > 0) {
+        const nx = q.shift();
+        nx.state = 'serving'; nx.svcS = simT; nx.svcE = simT + rexp(mu); srv = nx;
+      }
+    }
+  }
+  advTA(target - simT); simT = target;
+  setTargets();
+}
+
+function animPos(dt) {
+  const v = Math.max(220, 65 * spd);
+  for (const c of custs) {
+    const dx = c.tx - c.x, dy = c.ty - c.y;
+    const d = Math.hypot(dx, dy), s = v * dt;
+    if (d < s) { c.x = c.tx; c.y = c.ty; }
+    else { c.x += dx / d * s; c.y += dy / d * s; }
+    if (c.state === 'departing') c.op = Math.max(0, c.op - dt * 1.5);
+  }
+  custs = custs.filter(c => !(c.state === 'departing' && c.op <= 0));
+}
+
+function arrow(x, y, col) {
+  cx.fillStyle = col;
+  cx.beginPath();
+  cx.moveTo(x, y); cx.lineTo(x - 10, y - 5); cx.lineTo(x - 10, y + 5);
+  cx.fill();
+}
+
+function drawC(c) {
+  cx.save(); cx.globalAlpha = c.op;
+  cx.shadowColor = COL[c.state]; cx.shadowBlur = 7;
+  cx.fillStyle = COL[c.state];
+  cx.beginPath(); cx.arc(c.x, c.y, CR, 0, Math.PI * 2); cx.fill();
+  cx.shadowBlur = 0; cx.fillStyle = '#000';
+  cx.font = `bold ${CR - 2}px monospace`;
+  cx.textAlign = 'center'; cx.textBaseline = 'middle';
+  cx.fillText(String(c.id % 100), c.x, c.y);
+  cx.restore();
+}
+
+function draw() {
+  cx.clearRect(0, 0, W, H);
+  cx.fillStyle = '#0d0d1a'; cx.fillRect(0, 0, W, H);
+
+  // Queue lane
+  const QL = 26, QR = QFX;
+  cx.strokeStyle = '#1b1b38'; cx.lineWidth = 1;
+  cx.strokeRect(QL, CY - CR - 14, QR - QL, (CR + 14) * 2);
+  cx.strokeStyle = '#242446'; cx.lineWidth = 1.5; cx.setLineDash([4, 5]);
+  cx.beginPath(); cx.moveTo(QL, CY); cx.lineTo(QR, CY); cx.stroke();
+  cx.setLineDash([]);
+
+  // Arrival arrow
+  cx.strokeStyle = '#5599ff'; cx.lineWidth = 2;
+  cx.beginPath(); cx.moveTo(4, CY); cx.lineTo(QL, CY); cx.stroke();
+  arrow(QL, CY, '#5599ff');
+  cx.fillStyle = '#5599ff88'; cx.font = '11px sans-serif';
+  cx.textAlign = 'center'; cx.textBaseline = 'bottom';
+  cx.fillText('λ', (4 + QL) / 2, CY - 2);
+
+  cx.fillStyle = '#f0c04055'; cx.font = '10px sans-serif';
+  cx.textAlign = 'center'; cx.textBaseline = 'bottom';
+  cx.fillText('QUEUE', (QL + QR) / 2, CY - CR - 15);
+
+  // Server box
+  const sl = SRV_X - SRV_W / 2, st = SRV_Y - SRV_H / 2;
+  if (srv) { cx.shadowColor = '#50dd80'; cx.shadowBlur = 14; }
+  cx.strokeStyle = srv ? '#50dd80' : '#253225'; cx.lineWidth = 2;
+  cx.strokeRect(sl, st, SRV_W, SRV_H);
+  cx.shadowBlur = 0;
+  cx.fillStyle = '#0a180a'; cx.fillRect(sl + 1, st + 1, SRV_W - 2, SRV_H - 2);
+  cx.fillStyle = srv ? '#50dd80aa' : '#2a3a2a'; cx.font = '10px sans-serif';
+  cx.textAlign = 'center'; cx.textBaseline = 'bottom';
+  cx.fillText('SERVER', SRV_X, st - 4);
+  cx.textBaseline = 'top'; cx.fillStyle = '#50dd8066';
+  cx.fillText('μ', SRV_X, st + SRV_H + 4);
+
+  // Exit arrow
+  const ex = SRV_X + SRV_W / 2 + 3;
+  cx.strokeStyle = '#666'; cx.lineWidth = 2;
+  cx.beginPath(); cx.moveTo(ex, SRV_Y); cx.lineTo(ex + 26, SRV_Y); cx.stroke();
+  arrow(ex + 26, SRV_Y, '#666');
+
+  // Customers
+  custs.forEach(drawC);
+
+  // HUD
+  cx.fillStyle = '#444'; cx.font = '11px monospace';
+  cx.textAlign = 'left'; cx.textBaseline = 'top';
+  cx.fillText(`t=${simT.toFixed(0)}s  arrivals:${cid}  departed:${deps.length}`, 8, 6);
+  cx.fillStyle = '#f0c040'; cx.font = 'bold 12px sans-serif';
+  cx.textAlign = 'right'; cx.fillText(`Queue: ${q.length}`, W - 8, 6);
+
+  // Queue-length chart
+  const CTop = SH + 5, CBot = H - 8, CL = 40, CR2 = W - 8;
+  cx.fillStyle = '#080816'; cx.fillRect(CL, CTop, CR2 - CL, CBot - CTop);
+  cx.fillStyle = '#333'; cx.font = '10px sans-serif';
+  cx.textAlign = 'left'; cx.textBaseline = 'top';
+  cx.fillText('Queue length Nq(t)', CL + 3, CTop + 2);
+
+  const mx = Math.max(8, ...hist);
+  cx.strokeStyle = '#f0c040'; cx.lineWidth = 1.3;
+  cx.beginPath();
+  hist.forEach((v, i) => {
+    const px = CL + (i / (hist.length - 1)) * (CR2 - CL);
+    const py = CBot - ((v / mx) * (CBot - CTop - 10));
+    i === 0 ? cx.moveTo(px, py) : cx.lineTo(px, py);
+  });
+  cx.stroke();
+
+  // Theoretical Lq dashed line
+  if (lam < mu) {
+    const r = lam / mu, Lq = r * r / (1 - r);
+    if (Lq < mx * 1.5) {
+      const py = CBot - ((Lq / mx) * (CBot - CTop - 10));
+      cx.strokeStyle = '#f0c04044'; cx.lineWidth = 1; cx.setLineDash([3, 5]);
+      cx.beginPath(); cx.moveTo(CL, py); cx.lineTo(CR2, py); cx.stroke();
+      cx.setLineDash([]);
+      cx.fillStyle = '#f0c04088'; cx.textAlign = 'right'; cx.textBaseline = 'bottom';
+      cx.fillText(`Lq=${Lq.toFixed(1)}`, CR2, py - 1);
+    }
+  }
+
+  cx.fillStyle = '#444'; cx.textAlign = 'right'; cx.textBaseline = 'bottom';
+  cx.fillText(String(mx), CL - 2, CTop + 12);
+  cx.fillText('0', CL - 2, CBot);
+}
+
+function updStats() {
+  if (simT < 1) return;
+  const r = lam / mu;
+  const s = (id, v) => document.getElementById(id).textContent = v;
+  if (lam < mu) {
+    s('tr', r.toFixed(3));
+    s('tL', (r / (1 - r)).toFixed(2));
+    s('tLq', (r * r / (1 - r)).toFixed(2));
+    s('tW', (1 / (mu - lam)).toFixed(2));
+    s('tWq', (lam / (mu * (mu - lam))).toFixed(2));
+  } else {
+    ['tr', 'tL', 'tLq', 'tW', 'tWq'].forEach(id => s(id, '∞'));
+  }
+  s('or', (busyT / simT).toFixed(3));
+  s('oL', (areaN / simT).toFixed(2));
+  s('oLq', (areaNq / simT).toFixed(2));
+  if (deps.length > 3) {
+    s('oW', (totS / deps.length).toFixed(2));
+    s('oWq', (totW / deps.length).toFixed(2));
+  }
+}
+
+function frame(t) {
+  const ts = t / 1000;
+  if (lastReal === null) lastReal = ts;
+  const rdt = Math.min(ts - lastReal, 0.1);
+  lastReal = ts;
+  stepSim(simT + rdt * spd);
+  animPos(rdt);
+  if (simT - lastHistT > 0.4) {
+    hist.shift(); hist.push(q.length);
+    lastHistT = simT;
+  }
+  updStats(); draw();
+  requestAnimationFrame(frame);
+}
+
+function sync() {
+  lam = +document.getElementById('sl').value;
+  mu = +document.getElementById('sm').value;
+  spd = +document.getElementById('ss').value;
+  const s = (id, v) => document.getElementById(id).textContent = v;
+  s('lv', lam.toFixed(2)); s('mv', mu.toFixed(2)); s('spv', spd);
+  s('rlive', (lam / mu).toFixed(2));
+  document.getElementById('warn').className = 'warn' + (lam >= mu ? ' on' : '');
+  nxtArr = simT + rexp(lam);
+}
+
+['sl', 'sm', 'ss'].forEach(id => document.getElementById(id).addEventListener('input', sync));
+document.getElementById('rst').addEventListener('click', init);
+
+init(); requestAnimationFrame(frame);
+</script>
