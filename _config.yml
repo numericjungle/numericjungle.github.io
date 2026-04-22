@@ -1,6 +1,7 @@
-name: "Numeric Jungle: Navigating the Road to Reality."
+name: "Numeric Jungle"
+tagline: "Navigating the Road to Reality."
 url: 'https://numericjungle.github.io'
-description: "Notes from the Frontier"
+description: "Interactive explorations in machine learning, probability, and applied mathematics."
 
 exclude:
   - .bundle
