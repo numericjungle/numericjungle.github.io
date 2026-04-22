@@ -6,7 +6,7 @@
     <description>Research posts from Anthropic</description>
     <language>en-US</language>
     <generator>numericjungle scrape_rss.py</generator>
-    <lastBuildDate>Wed, 22 Apr 2026 02:57:36 +0000</lastBuildDate>
+    <lastBuildDate>Wed, 22 Apr 2026 07:58:56 +0000</lastBuildDate>
     <atom:link href="https://numericjungle.github.io/feeds/anthropic-research.xml" rel="self" type="application/rss+xml"/>
     <item>
       <title>Trustworthy Agents</title>
