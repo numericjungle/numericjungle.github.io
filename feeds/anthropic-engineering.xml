@@ -6,171 +6,174 @@
     <description>Engineering posts from Anthropic</description>
     <language>en-US</language>
     <generator>numericjungle scrape_rss.py</generator>
-    <lastBuildDate>Fri, 24 Apr 2026 13:48:21 +0000</lastBuildDate>
+    <lastBuildDate>Fri, 24 Apr 2026 19:04:04 +0000</lastBuildDate>
     <atom:link href="https://numericjungle.github.io/feeds/anthropic-engineering.xml" rel="self" type="application/rss+xml"/>
-    <item>
-      <title>Quantifying infrastructure noise in agentic coding evals</title>
-      <link>https://www.anthropic.com/engineering/infrastructure-noise</link>
-      <guid isPermaLink="true">https://www.anthropic.com/engineering/infrastructure-noise</guid>
-      <pubDate>Wed, 25 Mar 2026 00:00:00 +0000</pubDate>
-      <description>Quantifying infrastructure noise in agentic coding evals Infrastructure configuration can swing agentic coding benchmarks by several percentage points—sometimes more than the leaderboard gap between top models. Agentic coding benchmarks like SWE-bench and Terminal-Bench are commonly used to compare the software engineering capabilities of frontier models—with top spots on leaderboards often separated by just a few percentage points. These scores are often treated as precise measurements of...</description>
-    </item>
     <item>
       <title>An update on recent Claude Code quality reports</title>
       <link>https://www.anthropic.com/engineering/april-23-postmortem</link>
       <guid isPermaLink="true">https://www.anthropic.com/engineering/april-23-postmortem</guid>
-      <pubDate>Tue, 24 Mar 2026 00:00:00 +0000</pubDate>
-      <description>An update on recent Claude Code quality reports We traced recent reports of Claude Code quality issues to three separate changes. Here's what happened and what we're changing. Over the past month, we’ve been looking into reports that Claude’s responses have worsened for some users. We’ve traced these reports to three separate changes that affected Claude Code, the Claude Agent SDK, and Claude Cowork. The API was not impacted. All three issues have now been resolved as of April 20 (v2.1.116)...</description>
+      <pubDate>Thu, 23 Apr 2026 00:00:00 +0000</pubDate>
+      <description>An update on recent Claude Code quality reports Published Apr 23, 2026 We traced recent reports of Claude Code quality issues to three separate changes. Here's what happened and what we're changing. Over the past month, we’ve been looking into reports that Claude’s responses have worsened for some users. We’ve traced these reports to three separate changes that affected Claude Code, the Claude Agent SDK, and Claude Cowork. The API was not impacted. All three issues have now been resolved as of...</description>
     </item>
     <item>
       <title>Scaling Managed Agents: Decoupling the brain from the hands</title>
       <link>https://www.anthropic.com/engineering/managed-agents</link>
       <guid isPermaLink="true">https://www.anthropic.com/engineering/managed-agents</guid>
-      <pubDate>Fri, 06 Mar 2026 00:00:00 +0000</pubDate>
-      <description>Scaling Managed Agents: Decoupling the brain from the hands Harnesses encode assumptions that go stale as models improve. Managed Agents—our hosted service for long-horizon agent work—is built around interfaces that stay stable as harnesses change. Get started with Claude Managed Agents by following our docs . A running topic on the Engineering Blog is how to build effective agents and design harnesses for long-running work . A common thread across this work is that harnesses encode...</description>
+      <pubDate>Wed, 08 Apr 2026 00:00:00 +0000</pubDate>
+      <description>Scaling Managed Agents: Decoupling the brain from the hands Published Apr 08, 2026 Harnesses encode assumptions that go stale as models improve. Managed Agents—our hosted service for long-horizon agent work—is built around interfaces that stay stable as harnesses change. Get started with Claude Managed Agents by following our docs . A running topic on the Engineering Blog is how to build effective agents and design harnesses for long-running work . A common thread across this work is that...</description>
     </item>
     <item>
       <title>Claude Code auto mode: a safer way to skip permissions</title>
       <link>https://www.anthropic.com/engineering/claude-code-auto-mode</link>
       <guid isPermaLink="true">https://www.anthropic.com/engineering/claude-code-auto-mode</guid>
-      <pubDate>Thu, 05 Feb 2026 00:00:00 +0000</pubDate>
+      <pubDate>Wed, 25 Mar 2026 00:00:00 +0000</pubDate>
       <description>Claude Code auto mode: a safer way to skip permissions Published Mar 25, 2026 Claude Code users approve 93% of permission prompts. We built classifiers to automate some decisions, increasing safety while reducing approval fatigue. Here's what it catches, and what it misses. By default, Claude Code asks users for approval before running commands or modifying files. This keeps users safe, but it also means a lot of clicking "approve." Over time that leads to approval fatigue, where people stop...</description>
     </item>
     <item>
       <title>Harness design for long-running application development</title>
       <link>https://www.anthropic.com/engineering/harness-design-long-running-apps</link>
       <guid isPermaLink="true">https://www.anthropic.com/engineering/harness-design-long-running-apps</guid>
-      <pubDate>Wed, 21 Jan 2026 00:00:00 +0000</pubDate>
+      <pubDate>Tue, 24 Mar 2026 00:00:00 +0000</pubDate>
       <description>Harness design for long-running application development Published Mar 24, 2026 Harness design is key to performance at the frontier of agentic coding. Here's how we pushed Claude further in frontend design and long-running autonomous software engineering. Written by Prithvi Rajasekaran, a member of our Labs team. Over the past several months I’ve been working on two interconnected problems: getting Claude to produce high-quality frontend designs, and getting it to build complete applications...</description>
     </item>
     <item>
       <title>Eval awareness in Claude Opus 4.6’s BrowseComp performance</title>
       <link>https://www.anthropic.com/engineering/eval-awareness-browsecomp</link>
       <guid isPermaLink="true">https://www.anthropic.com/engineering/eval-awareness-browsecomp</guid>
-      <pubDate>Fri, 09 Jan 2026 00:00:00 +0000</pubDate>
+      <pubDate>Fri, 06 Mar 2026 00:00:00 +0000</pubDate>
       <description>Eval awareness in Claude Opus 4.6’s BrowseComp performance Published Mar 06, 2026 Evaluating Opus 4.6 on BrowseComp, we found cases where the model recognized the test, then found and decrypted answers to it—raising questions about eval integrity in web-enabled environments. BrowseComp is an evaluation designed to test how well models can find hard-to-locate information on the web. Like many benchmarks, it is vulnerable to contamination: answers leak onto the public web through academic...</description>
+    </item>
+    <item>
+      <title>Quantifying infrastructure noise in agentic coding evals</title>
+      <link>https://www.anthropic.com/engineering/infrastructure-noise</link>
+      <guid isPermaLink="true">https://www.anthropic.com/engineering/infrastructure-noise</guid>
+      <pubDate>Thu, 05 Feb 2026 00:00:00 +0000</pubDate>
+      <description>Quantifying infrastructure noise in agentic coding evals Published Feb 05, 2026 Infrastructure configuration can swing agentic coding benchmarks by several percentage points—sometimes more than the leaderboard gap between top models. Agentic coding benchmarks like SWE-bench and Terminal-Bench are commonly used to compare the software engineering capabilities of frontier models—with top spots on leaderboards often separated by just a few percentage points. These scores are often treated as...</description>
     </item>
     <item>
       <title>Building a C compiler with a team of parallel Claudes</title>
       <link>https://www.anthropic.com/engineering/building-c-compiler</link>
       <guid isPermaLink="true">https://www.anthropic.com/engineering/building-c-compiler</guid>
-      <pubDate>Wed, 26 Nov 2025 00:00:00 +0000</pubDate>
+      <pubDate>Thu, 05 Feb 2026 00:00:00 +0000</pubDate>
       <description>Building a C compiler with a team of parallel Claudes Published Feb 05, 2026 We tasked Opus 4.6 using agent teams to build a C Compiler, and then (mostly) walked away. Here's what it taught us about the future of autonomous software development. Written by Nicholas Carlini, a researcher on our Safeguards team. I've been experimenting with a new approach to supervising language models that we’re calling "agent teams." With agent teams, multiple Claude instances work in parallel on a shared...</description>
     </item>
     <item>
       <title>Designing AI-resistant technical evaluations</title>
       <link>https://www.anthropic.com/engineering/AI-resistant-technical-evaluations</link>
       <guid isPermaLink="true">https://www.anthropic.com/engineering/AI-resistant-technical-evaluations</guid>
-      <pubDate>Mon, 24 Nov 2025 00:00:00 +0000</pubDate>
+      <pubDate>Wed, 21 Jan 2026 00:00:00 +0000</pubDate>
       <description>Designing AI-resistant technical evaluations Published Jan 21, 2026 What we learned from three iterations of a performance engineering take-home that Claude keeps beating. Written by Tristan Hume, a lead on Anthropic's performance optimization team. Tristan designed—and redesigned—the take-home test that's helped Anthropic hire dozens of performance engineers. Evaluating technical candidates becomes harder as AI capabilities improve. A take-home that distinguishes well between human skill...</description>
     </item>
     <item>
       <title>Demystifying evals for AI agents</title>
       <link>https://www.anthropic.com/engineering/demystifying-evals-for-ai-agents</link>
       <guid isPermaLink="true">https://www.anthropic.com/engineering/demystifying-evals-for-ai-agents</guid>
-      <pubDate>Tue, 04 Nov 2025 00:00:00 +0000</pubDate>
+      <pubDate>Fri, 09 Jan 2026 00:00:00 +0000</pubDate>
       <description>Demystifying evals for AI agents Published Jan 09, 2026 The capabilities that make agents useful also make them difficult to evaluate. The strategies that work across deployments combine techniques to match the complexity of the systems they measure. Good evaluations help teams ship AI agents more confidently. Without them, it’s easy to get stuck in reactive loops—catching issues only in production, where fixing one failure creates others. Evals make problems and behavioral changes visible...</description>
     </item>
     <item>
       <title>Effective harnesses for long-running agents</title>
       <link>https://www.anthropic.com/engineering/effective-harnesses-for-long-running-agents</link>
       <guid isPermaLink="true">https://www.anthropic.com/engineering/effective-harnesses-for-long-running-agents</guid>
-      <pubDate>Mon, 20 Oct 2025 00:00:00 +0000</pubDate>
+      <pubDate>Wed, 26 Nov 2025 00:00:00 +0000</pubDate>
       <description>Effective harnesses for long-running agents Published Nov 26, 2025 Agents still face challenges working across many context windows. We looked to human engineers for inspiration in creating a more effective harness for long-running agents. As AI agents become more capable, developers are increasingly asking them to take on complex tasks requiring work that spans hours, or even days. However, getting agents to make consistent progress across multiple context windows remains an open problem. The...</description>
     </item>
     <item>
       <title>Introducing advanced tool use on the Claude Developer Platform</title>
       <link>https://www.anthropic.com/engineering/advanced-tool-use</link>
       <guid isPermaLink="true">https://www.anthropic.com/engineering/advanced-tool-use</guid>
-      <pubDate>Thu, 16 Oct 2025 00:00:00 +0000</pubDate>
+      <pubDate>Mon, 24 Nov 2025 00:00:00 +0000</pubDate>
       <description>Introducing advanced tool use on the Claude Developer Platform Published Nov 24, 2025 We’ve added three new beta features that let Claude discover, learn, and execute tools dynamically. Here’s how they work. The future of AI agents is one where models work seamlessly across hundreds or thousands of tools. An IDE assistant that integrates git operations, file manipulation, package managers, testing frameworks, and deployment pipelines. An operations coordinator that connects Slack, GitHub...</description>
     </item>
     <item>
       <title>Code execution with MCP: Building more efficient agents</title>
       <link>https://www.anthropic.com/engineering/code-execution-with-mcp</link>
       <guid isPermaLink="true">https://www.anthropic.com/engineering/code-execution-with-mcp</guid>
-      <pubDate>Mon, 29 Sep 2025 00:00:00 +0000</pubDate>
+      <pubDate>Tue, 04 Nov 2025 00:00:00 +0000</pubDate>
       <description>Code execution with MCP: Building more efficient agents Published Nov 04, 2025 Direct tool calls consume context for each definition and result. Agents scale better by writing code to call tools instead. Here's how it works with MCP. The Model Context Protocol (MCP) is an open standard for connecting AI agents to external systems. Connecting agents to tools and data traditionally requires a custom integration for each pairing, creating fragmentation and duplicated effort that makes it...</description>
     </item>
     <item>
       <title>Beyond permission prompts: making Claude Code more secure and autonomous</title>
       <link>https://www.anthropic.com/engineering/claude-code-sandboxing</link>
       <guid isPermaLink="true">https://www.anthropic.com/engineering/claude-code-sandboxing</guid>
-      <pubDate>Wed, 17 Sep 2025 00:00:00 +0000</pubDate>
+      <pubDate>Mon, 20 Oct 2025 00:00:00 +0000</pubDate>
       <description>Beyond permission prompts: making Claude Code more secure and autonomous Published Oct 20, 2025 Claude Code's new sandboxing features, a bash tool and Claude Code on the web, reduce permission prompts and increase user safety by enabling two boundaries: filesystem and network isolation. In Claude Code , Claude writes, tests, and debugs code alongside you, navigating your codebase, editing multiple files, and running commands to verify its work. Giving Claude this much access to your codebase...</description>
     </item>
     <item>
       <title>Equipping agents for the real world with Agent Skills</title>
       <link>https://www.anthropic.com/engineering/equipping-agents-for-the-real-world-with-agent-skills</link>
       <guid isPermaLink="true">https://www.anthropic.com/engineering/equipping-agents-for-the-real-world-with-agent-skills</guid>
-      <pubDate>Thu, 11 Sep 2025 00:00:00 +0000</pubDate>
+      <pubDate>Thu, 16 Oct 2025 00:00:00 +0000</pubDate>
       <description>Equipping agents for the real world with Agent Skills Published Oct 16, 2025 Claude is powerful, but real work requires procedural knowledge and organizational context. Introducing Agent Skills, a new way to build specialized agents using files and folders. Update: We've published Agent Skills as an open standard for cross-platform portability. (December 18, 2025) As model capabilities improve, we can now build general-purpose agents that interact with full-fledged computing environments...</description>
     </item>
     <item>
       <title>Effective context engineering for AI agents</title>
       <link>https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents</link>
       <guid isPermaLink="true">https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents</guid>
-      <pubDate>Thu, 26 Jun 2025 00:00:00 +0000</pubDate>
+      <pubDate>Mon, 29 Sep 2025 00:00:00 +0000</pubDate>
       <description>Effective context engineering for AI agents Published Sep 29, 2025 Context is a critical but finite resource for AI agents. In this post, we explore strategies for effectively curating and managing the context that powers them. After a few years of prompt engineering being the focus of attention in applied AI, a new term has come to prominence: context engineering . Building with language models is becoming less about finding the right words and phrases for your prompts, and more about...</description>
     </item>
     <item>
       <title>A postmortem of three recent issues</title>
       <link>https://www.anthropic.com/engineering/a-postmortem-of-three-recent-issues</link>
       <guid isPermaLink="true">https://www.anthropic.com/engineering/a-postmortem-of-three-recent-issues</guid>
-      <pubDate>Fri, 13 Jun 2025 00:00:00 +0000</pubDate>
+      <pubDate>Wed, 17 Sep 2025 00:00:00 +0000</pubDate>
       <description>A postmortem of three recent issues Published Sep 17, 2025 This is a technical report on three bugs that intermittently degraded responses from Claude. Below we explain what happened, why it took time to fix, and what we're changing. Between August and early September, three infrastructure bugs intermittently degraded Claude's response quality. We've now resolved these issues and want to explain what happened. In early August, a number of users began reporting degraded responses from Claude...</description>
     </item>
     <item>
       <title>Writing effective tools for agents — with agents</title>
       <link>https://www.anthropic.com/engineering/writing-tools-for-agents</link>
       <guid isPermaLink="true">https://www.anthropic.com/engineering/writing-tools-for-agents</guid>
-      <pubDate>Fri, 18 Apr 2025 00:00:00 +0000</pubDate>
+      <pubDate>Thu, 11 Sep 2025 00:00:00 +0000</pubDate>
       <description>Writing effective tools for agents — with agents Published Sep 11, 2025 Agents are only as effective as the tools we give them. We share how to write high-quality tools and evaluations, and how you can boost performance by using Claude to optimize its tools for itself. The Model Context Protocol (MCP) can empower LLM agents with potentially hundreds of tools to solve real-world tasks. But how do we make those tools maximally effective? In this post, we describe our most effective techniques...</description>
     </item>
     <item>
       <title>Desktop Extensions: One-click MCP server installation for Claude Desktop</title>
       <link>https://www.anthropic.com/engineering/desktop-extensions</link>
       <guid isPermaLink="true">https://www.anthropic.com/engineering/desktop-extensions</guid>
-      <pubDate>Thu, 20 Mar 2025 00:00:00 +0000</pubDate>
+      <pubDate>Thu, 26 Jun 2025 00:00:00 +0000</pubDate>
       <description>Desktop Extensions: One-click MCP server installation for Claude Desktop Published Jun 26, 2025 Desktop Extensions make installing MCP servers as easy as clicking a button. We share the technical architecture and tips for creating good extensions. File extension update Sep 11, 2025 Claude Desktop Extensions now use the .mcpb (MCP Bundle) file extension instead of .dxt. Existing .dxt extensions will continue to work, but we recommend developers use .mcpb for new extensions going forward. All...</description>
     </item>
     <item>
       <title>How we built our multi-agent research system</title>
       <link>https://www.anthropic.com/engineering/multi-agent-research-system</link>
       <guid isPermaLink="true">https://www.anthropic.com/engineering/multi-agent-research-system</guid>
-      <pubDate>Mon, 06 Jan 2025 00:00:00 +0000</pubDate>
+      <pubDate>Fri, 13 Jun 2025 00:00:00 +0000</pubDate>
       <description>How we built our multi-agent research system Published Jun 13, 2025 Our Research feature uses multiple Claude agents to explore complex topics more effectively. We share the engineering challenges and the lessons we learned from building this system. Claude now has Research capabilities that allow it to search across the web, Google Workspace, and any integrations to accomplish complex tasks. The journey of this multi-agent system from prototype to production taught us critical lessons about...</description>
     </item>
     <item>
       <title>Claude Code: Best practices for agentic coding</title>
       <link>https://www.anthropic.com/engineering/claude-code-best-practices</link>
       <guid isPermaLink="true">https://www.anthropic.com/engineering/claude-code-best-practices</guid>
-      <pubDate>Thu, 19 Dec 2024 00:00:00 +0000</pubDate>
+      <pubDate>Fri, 18 Apr 2025 00:00:00 +0000</pubDate>
       <description>Search... ⌘ K Ask AI Claude Developer Platform Claude Code on the Web Claude Code on the Web Search... Navigation Use Claude Code Best Practices for Claude Code Getting started Build with Claude Code Deployment Administration Configuration Reference Agent SDK What's New Resources Getting started Overview Quickstart Changelog Core concepts How Claude Code works Extend Claude Code Explore the .claude directory Explore the context window Use Claude Code Store instructions and memories Permission...</description>
     </item>
     <item>
       <title>The &amp;quot;think&amp;quot; tool: Enabling Claude to stop and think in complex tool use situations</title>
       <link>https://www.anthropic.com/engineering/claude-think-tool</link>
       <guid isPermaLink="true">https://www.anthropic.com/engineering/claude-think-tool</guid>
-      <pubDate>Thu, 19 Sep 2024 00:00:00 +0000</pubDate>
+      <pubDate>Thu, 20 Mar 2025 00:00:00 +0000</pubDate>
       <description>The "think" tool: Enabling Claude to stop and think in complex tool use situations Published Mar 20, 2025 A new tool that improves Claude's complex problem-solving performance Extended thinking update Dec 15, 2025 Extended thinking capabilities have improved since its initial release, such that we recommend using that feature instead of a dedicated think tool in most cases. Extended thinking provides similar benefits—giving Claude space to reason through complex problems—with better...</description>
     </item>
     <item>
       <title>Raising the bar on SWE-bench Verified with Claude 3.5 Sonnet</title>
       <link>https://www.anthropic.com/engineering/swe-bench-sonnet</link>
       <guid isPermaLink="true">https://www.anthropic.com/engineering/swe-bench-sonnet</guid>
+      <pubDate>Mon, 06 Jan 2025 00:00:00 +0000</pubDate>
       <description>Raising the bar on SWE-bench Verified with Claude 3.5 Sonnet Published Jan 06, 2025 SWE-bench is an AI evaluation benchmark that assesses a model's ability to complete real-world software engineering tasks. Our latest model, the upgraded Claude 3.5 Sonnet , achieved 49% on SWE-bench Verified, a software engineering evaluation, beating the previous state-of-the-art model's 45%. This post explains the "agent" we built around the model, and is intended to help developers get the best possible...</description>
     </item>
     <item>
       <title>Building effective agents</title>
       <link>https://www.anthropic.com/engineering/building-effective-agents</link>
       <guid isPermaLink="true">https://www.anthropic.com/engineering/building-effective-agents</guid>
+      <pubDate>Thu, 19 Dec 2024 00:00:00 +0000</pubDate>
       <description>Building effective agents Published Dec 19, 2024 We've worked with dozens of teams building LLM agents across industries. Consistently, the most successful implementations use simple, composable patterns rather than complex frameworks. Over the past year, we've worked with dozens of teams building large language model (LLM) agents across industries. Consistently, the most successful implementations weren't using complex frameworks or specialized libraries. Instead, they were building with...</description>
     </item>
     <item>
       <title>Introducing Contextual Retrieval</title>
       <link>https://www.anthropic.com/engineering/contextual-retrieval</link>
       <guid isPermaLink="true">https://www.anthropic.com/engineering/contextual-retrieval</guid>
+      <pubDate>Thu, 19 Sep 2024 00:00:00 +0000</pubDate>
       <description>Introducing Contextual Retrieval Published Sep 19, 2024 For an AI model to be useful in specific contexts, it often needs access to background knowledge. For an AI model to be useful in specific contexts, it often needs access to background knowledge. For example, customer support chatbots need knowledge about the specific business they're being used for, and legal analyst bots need to know about a vast array of past cases. Developers typically enhance an AI model's knowledge using...</description>
     </item>
   </channel>
