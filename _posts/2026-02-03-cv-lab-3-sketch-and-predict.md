@@ -1,5 +1,5 @@
 ---
-date: 2026-04-20 10:00:00.000000
+date: 2026-02-03 09:00:00.000000
 layout: post
 title: "CV Lab 3 - Sketch and Predict"
 description: "Draw a digit on the canvas and watch a CNN — training on real MNIST in the background — classify it live."

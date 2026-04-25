@@ -1,5 +1,5 @@
 ---
-date: 2026-04-20 10:30:00.000000
+date: 2026-02-17 09:00:00.000000
 layout: post
 title: "CV Lab 4 - Color Clustering and Segmentation"
 description: "K-means groups pixels by colour — a classic unsupervised technique at the heart of image segmentation and palette extraction."

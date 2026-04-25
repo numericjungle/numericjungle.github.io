@@ -1,0 +1,240 @@
+---
+layout: embed
+title: DS Lab 8 – Logistic Map & Period Doubling
+permalink: /train-deep-learning/ds-logistic/
+---
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:system-ui,sans-serif;background:#0d0d1a;color:#ccc;padding:10px}
+#app{max-width:760px;margin:0 auto}
+.ctrl{display:flex;flex-wrap:wrap;gap:10px;align-items:center;background:#141426;border-radius:8px;padding:10px 14px;margin-bottom:8px}
+.sg{display:flex;flex-direction:column;gap:3px;min-width:130px}
+.sg label{font-size:12px;color:#888}.sg label b{color:#7ec8ff}
+input[type=range]{width:100%;accent-color:#7ec8ff}
+.btn{background:transparent;border:1px solid #7ec8ff66;color:#7ec8ffaa;border-radius:5px;padding:5px 12px;cursor:pointer;font-size:12px;margin-top:8px}
+.btn:hover{border-color:#7ec8ff;color:#7ec8ff}
+.row{display:flex;gap:6px}
+canvas{display:block;border-radius:8px}
+.info{background:#141426;border-radius:8px;padding:8px 14px;font-size:12px;color:#888;margin-top:6px;line-height:1.8}
+</style>
+<div id="app">
+  <div class="ctrl">
+    <div class="sg">
+      <label>r = <b id="rv">3.50</b></label>
+      <input type="range" id="sr" min="1" max="4" step="0.005" value="3.5">
+    </div>
+    <div class="sg">
+      <label>IC x₀ = <b id="x0v">0.40</b></label>
+      <input type="range" id="sx0" min="0.01" max="0.99" step="0.01" value="0.4">
+    </div>
+    <div class="sg">
+      <label>Steps N = <b id="nv">40</b></label>
+      <input type="range" id="sn" min="10" max="120" step="5" value="40">
+    </div>
+    <div class="sg">
+      <label>Animate</label>
+      <button class="btn" id="anim">▶ Sweep r</button>
+    </div>
+  </div>
+  <div class="row">
+    <canvas id="cw" width="360" height="360"></canvas>
+    <canvas id="bif" width="380" height="360"></canvas>
+  </div>
+  <div class="info" id="info">—</div>
+</div>
+<script>
+const cw=document.getElementById('cw'),cc=cw.getContext('2d');
+const bf=document.getElementById('bif'),bc=bf.getContext('2d');
+const CWW=360,CWH=360,BFW=380,BFH=360;
+
+let r=3.5,x0=0.4,N=40;
+let animating=false,animR=1.0;
+
+// Precompute bifurcation diagram
+const NR=500,NBURN=300,NORBIT=80;
+const RMIN=1,RMAX=4;
+const bifPts=[];
+for(let i=0;i<NR;i++){
+  const rv=RMIN+i*(RMAX-RMIN)/(NR-1);
+  let x=0.5;
+  for(let k=0;k<NBURN;k++) x=rv*x*(1-x);
+  for(let k=0;k<NORBIT;k++){x=rv*x*(1-x);bifPts.push([rv,x]);}
+}
+
+const PAD=30;
+
+function drawCobweb(){
+  cc.clearRect(0,0,CWW,CWH);cc.fillStyle='#0d0d1a';cc.fillRect(0,0,CWW,CWH);
+  const PW=CWW-2*PAD,PH=CWH-2*PAD;
+  function mp(v){return PAD+v*PW;}
+  function mq(v){return PAD+(1-v)*PH;}
+
+  // Grid
+  cc.strokeStyle='#131326';cc.lineWidth=1;
+  [0.25,0.5,0.75].forEach(v=>{
+    cc.beginPath();cc.moveTo(mp(v),PAD);cc.lineTo(mp(v),PAD+PH);cc.stroke();
+    cc.beginPath();cc.moveTo(PAD,mq(v));cc.lineTo(PAD+PW,mq(v));cc.stroke();
+  });
+
+  // Diagonal y=x
+  cc.strokeStyle='#252540';cc.lineWidth=1;
+  cc.beginPath();cc.moveTo(PAD,PAD+PH);cc.lineTo(PAD+PW,PAD);cc.stroke();
+
+  // Parabola f(x) = rx(1-x)
+  cc.beginPath();cc.strokeStyle='#7ec8ff';cc.lineWidth=2;
+  for(let i=0;i<=200;i++){
+    const x=i/200;const y=r*x*(1-x);
+    i===0?cc.moveTo(mp(x),mq(y)):cc.lineTo(mp(x),mq(y));
+  }
+  cc.stroke();
+
+  // Cobweb
+  let x=x0;
+  cc.strokeStyle='#f0c040';cc.lineWidth=1.5;cc.beginPath();cc.moveTo(mp(x),mq(0));
+  const cobPts=[[x,0]];
+  for(let k=0;k<N;k++){
+    const y=r*x*(1-x);
+    cobPts.push([x,y]);// vertical: (x, x→y)
+    cobPts.push([y,y]);// horizontal: (x→y, y) i.e. go to diagonal
+    x=y;
+  }
+  cobPts.forEach(([cx2,cy],i)=>{
+    i===0?cc.moveTo(mp(cx2),mq(cy)):cc.lineTo(mp(cx2),mq(cy));
+  });
+  cc.stroke();
+
+  // Starting point
+  cc.beginPath();cc.arc(mp(x0),mq(0),4,0,2*Math.PI);
+  cc.fillStyle='#50dd80';cc.fill();
+
+  // Axis labels
+  cc.fillStyle='#3a3a60';cc.font='10px monospace';cc.textAlign='center';
+  [0,0.25,0.5,0.75,1].forEach(v=>cc.fillText(v.toFixed(2),mp(v),PAD+PH+13));
+  cc.textAlign='right';
+  [0,0.25,0.5,0.75,1].forEach(v=>cc.fillText(v.toFixed(2),PAD-3,mq(v)+4));
+  cc.fillStyle='#555';cc.font='11px monospace';cc.textAlign='left';
+  cc.fillText('Cobweb diagram',PAD,14);
+  cc.fillStyle='#3a3a60';cc.font='11px sans-serif';cc.textAlign='center';
+  cc.fillText('xₙ',CWW/2,CWH-2);
+  cc.save();cc.translate(10,CWH/2);cc.rotate(-Math.PI/2);cc.fillText('xₙ₊₁',0,0);cc.restore();
+}
+
+function drawBifurcation(){
+  bc.clearRect(0,0,BFW,BFH);bc.fillStyle='#0d0d1a';bc.fillRect(0,0,BFW,BFH);
+  const PW=BFW-2*PAD,PH=BFH-2*PAD;
+  function mrp(rv){return PAD+(rv-RMIN)/(RMAX-RMIN)*PW;}
+  function mxp(xv){return PAD+(1-xv)*PH;}
+
+  // Grid
+  bc.strokeStyle='#131326';bc.lineWidth=1;
+  [1.5,2,2.5,3,3.5,4].forEach(rv=>{
+    bc.beginPath();bc.moveTo(mrp(rv),PAD);bc.lineTo(mrp(rv),PAD+PH);bc.stroke();
+  });
+  [0.25,0.5,0.75].forEach(xv=>{
+    bc.beginPath();bc.moveTo(PAD,mxp(xv));bc.lineTo(PAD+PW,mxp(xv));bc.stroke();
+  });
+
+  // Bifurcation points
+  bifPts.forEach(([rv,xv])=>{
+    const xp=mrp(rv),yp=mxp(xv);
+    bc.fillStyle='rgba(126,200,255,0.4)';
+    bc.fillRect(xp-0.4,yp-0.4,0.8,0.8);
+  });
+
+  // Current r line
+  bc.strokeStyle='#f0c04088';bc.lineWidth=1.5;bc.setLineDash([4,4]);
+  bc.beginPath();bc.moveTo(mrp(r),PAD);bc.lineTo(mrp(r),PAD+PH);bc.stroke();
+  bc.setLineDash([]);
+
+  // Feigenbaum points
+  const feig=[3,3.449,3.544,3.5644,3.5688,3.56994];
+  feig.forEach((rv,i)=>{
+    if(rv<RMIN||rv>RMAX) return;
+    bc.strokeStyle='rgba(255,100,136,0.4)';bc.lineWidth=1;bc.setLineDash([2,4]);
+    bc.beginPath();bc.moveTo(mrp(rv),PAD);bc.lineTo(mrp(rv),PAD+PH);bc.stroke();
+    bc.setLineDash([]);
+    bc.fillStyle='rgba(255,100,136,0.6)';bc.font='9px monospace';bc.textAlign='center';
+    bc.fillText(`2^${i}`,mrp(rv),PAD+6+i*10);
+  });
+
+  // Orbit dots at current r
+  let xv=x0;
+  for(let k=0;k<NBURN;k++) xv=r*xv*(1-xv);
+  for(let k=0;k<30;k++){
+    xv=r*xv*(1-xv);
+    bc.beginPath();bc.arc(mrp(r),mxp(xv),3,0,2*Math.PI);
+    bc.fillStyle='#f0c040';bc.shadowColor='#f0c040';bc.shadowBlur=4;bc.fill();bc.shadowBlur=0;
+  }
+
+  // Axis labels
+  bc.fillStyle='#3a3a60';bc.font='10px monospace';bc.textAlign='center';
+  [1,1.5,2,2.5,3,3.5,4].forEach(rv=>bc.fillText(rv.toFixed(1),mrp(rv),PAD+PH+13));
+  bc.textAlign='right';
+  [0,0.25,0.5,0.75,1].forEach(xv=>bc.fillText(xv.toFixed(2),PAD-3,mxp(xv)+4));
+  bc.fillStyle='#555';bc.font='11px monospace';bc.textAlign='left';
+  bc.fillText('Bifurcation diagram',PAD,14);
+  bc.fillStyle='#3a3a60';bc.font='11px sans-serif';bc.textAlign='center';
+  bc.fillText('r',BFW/2,BFH-2);
+}
+
+function detectPeriod(){
+  let xv=x0;
+  for(let k=0;k<500;k++) xv=r*xv*(1-xv);
+  const orbit=[];
+  for(let k=0;k<64;k++){xv=r*xv*(1-xv);orbit.push(xv);}
+  const last=orbit[orbit.length-1];
+  for(let p=1;p<=32;p++){
+    if(Math.abs(orbit[orbit.length-1-p]-last)<0.002) return p;
+  }
+  return '?';
+}
+
+function draw(){
+  drawCobweb();drawBifurcation();
+  const period=detectPeriod();
+  // Lyapunov estimate
+  let xv=0.5,le=0;
+  for(let k=0;k<200;k++) xv=r*xv*(1-xv);
+  for(let k=0;k<500;k++){
+    const d=Math.abs(r*(1-2*xv));
+    if(d>1e-12) le+=Math.log(d);
+    xv=r*xv*(1-xv);
+  }
+  le/=500;
+  document.getElementById('info').innerHTML=
+    `r = ${r.toFixed(3)} &nbsp;|&nbsp; period ≈ ${period} &nbsp;|&nbsp; `+
+    `λ ≈ ${le.toFixed(3)} `+
+    `<span style="color:${le>0?'#ff6688':'#50dd80'}">(${le>0?'CHAOS':'ORDER'})</span><br>`+
+    `Feigenbaum constant δ ≈ 4.6692: ratio of successive period-doubling intervals.`;
+}
+
+let sweepId=null;
+document.getElementById('anim').addEventListener('click',()=>{
+  animating=!animating;
+  document.getElementById('anim').textContent=animating?'⏸ Pause':'▶ Sweep r';
+  if(!animating&&sweepId){clearInterval(sweepId);sweepId=null;}
+  if(animating){
+    animR=1.0;
+    sweepId=setInterval(()=>{
+      animR+=0.005;if(animR>4) animR=1;
+      r=animR;document.getElementById('sr').value=r;
+      document.getElementById('rv').textContent=r.toFixed(3);
+      draw();
+    },30);
+  }
+});
+
+function sync(){
+  r=+document.getElementById('sr').value;
+  x0=+document.getElementById('sx0').value;
+  N=+document.getElementById('sn').value;
+  document.getElementById('rv').textContent=r.toFixed(3);
+  document.getElementById('x0v').textContent=x0.toFixed(2);
+  document.getElementById('nv').textContent=N;
+  if(animating){animating=false;clearInterval(sweepId);sweepId=null;document.getElementById('anim').textContent='▶ Sweep r';}
+  draw();
+}
+
+['sr','sx0','sn'].forEach(id=>document.getElementById(id).addEventListener('input',sync));
+sync();
+</script>

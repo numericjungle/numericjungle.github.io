@@ -1,5 +1,5 @@
 ---
-date: 2026-04-21 10:20:00.000000
+date: 2026-04-07 09:00:00.000000
 layout: post
 title: "Queueing Lab 3 - Variants: M/M/1/K, M/D/1, and M/G/1"
 description: "Finite buffers, deterministic service, and the Pollaczek-Khinchine formula — three queue variants that reveal what really drives wait time."

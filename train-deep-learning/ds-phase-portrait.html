@@ -1,0 +1,263 @@
+---
+layout: embed
+title: DS Lab 3 – 2D Phase Portrait
+permalink: /train-deep-learning/ds-phase-portrait/
+---
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:system-ui,sans-serif;background:#0d0d1a;color:#ccc;padding:10px}
+#app{max-width:760px;margin:0 auto}
+.ctrl{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-start;background:#141426;border-radius:8px;padding:10px 14px;margin-bottom:8px}
+.sg{display:flex;flex-direction:column;gap:3px;min-width:110px}
+.sg label{font-size:11px;color:#888}.sg label b{color:#7ec8ff}
+input[type=range]{width:100%;accent-color:#7ec8ff}
+select{background:#1a1a30;border:1px solid #2a2a50;color:#ccc;padding:4px 8px;border-radius:5px;font-size:12px}
+.btn{background:transparent;border:1px solid #7ec8ff66;color:#7ec8ffaa;border-radius:5px;padding:5px 12px;cursor:pointer;font-size:12px}
+.btn:hover{border-color:#7ec8ff;color:#7ec8ff}
+canvas{display:block;width:100%;border-radius:8px;margin:6px 0;cursor:crosshair}
+.info{background:#141426;border-radius:8px;padding:8px 14px;font-size:12px;color:#888;font-family:monospace;line-height:1.7}
+</style>
+<div id="app">
+  <div class="ctrl">
+    <div class="sg">
+      <label>System</label>
+      <select id="sys">
+        <option value="linear">Linear: [a,b;c,d]</option>
+        <option value="nonlin" selected>Nonlinear saddle</option>
+        <option value="pendulum">Pendulum</option>
+        <option value="lv">Lotka-Volterra</option>
+      </select>
+    </div>
+    <div class="sg">
+      <label>a = <b id="av">−1.0</b></label>
+      <input type="range" id="sa" min="-3" max="3" step="0.1" value="-1">
+    </div>
+    <div class="sg">
+      <label>b = <b id="bv">−2.0</b></label>
+      <input type="range" id="sb" min="-3" max="3" step="0.1" value="-2">
+    </div>
+    <div class="sg">
+      <label>c = <b id="cv2">2.0</b></label>
+      <input type="range" id="sc" min="-3" max="3" step="0.1" value="2">
+    </div>
+    <div class="sg">
+      <label>d = <b id="dv">−1.0</b></label>
+      <input type="range" id="sd" min="-3" max="3" step="0.1" value="-1">
+    </div>
+    <button class="btn" id="clr">Clear</button>
+  </div>
+  <canvas id="cv" width="740" height="480"></canvas>
+  <div class="info" id="info">Click on the phase plane to launch a trajectory.</div>
+</div>
+<script>
+const cv=document.getElementById('cv'),cx=cv.getContext('2d');
+const W=740,H=480;
+const PAD=40;
+const PW=W-2*PAD,PH=H-2*PAD;
+const XMIN=-4,XMAX=4,YMIN=-4,YMAX=4;
+
+function px(x){return PAD+(x-XMIN)/(XMAX-XMIN)*PW;}
+function py(y){return PAD+(1-(y-YMIN)/(YMAX-YMIN))*PH;}
+function ix(px){return XMIN+(px-PAD)/PW*(XMAX-XMIN);}
+function iy(py){return YMIN+(1-(py-PAD)/PH)*(YMAX-YMIN);}
+
+let a=-1,b=-2,c=2,d=-1,sysKey='nonlin';
+let trajs=[];
+let frameId=null;
+
+const systems={
+  linear:{
+    f:(x,y)=>[a*x+b*y, c*x+d*y],
+    info:(a,b,c,d)=>{
+      const tr=a+d, det=a*d-b*c;
+      const disc=tr*tr-4*det;
+      let type='';
+      if(det<0) type='Saddle';
+      else if(det>0&&disc>0&&tr<0) type='Stable node';
+      else if(det>0&&disc>0&&tr>0) type='Unstable node';
+      else if(disc<0&&tr<0) type='Stable spiral';
+      else if(disc<0&&tr>0) type='Unstable spiral';
+      else if(Math.abs(tr)<1e-6) type='Centre';
+      else type='Degenerate';
+      return `tr=${tr.toFixed(2)}  det=${det.toFixed(2)}  →  ${type}`;
+    }
+  },
+  nonlin:{
+    f:(x,y)=>[a*x-b*x*y, -c*y+d*x*y],
+    info:()=>'Nonlinear system (Lotka-Volterra-like). Fixed points at origin and at intersections of nullclines.'
+  },
+  pendulum:{
+    f:(x,y)=>[y, -Math.sin(x)-0.1*y],
+    info:()=>'Damped pendulum: θ̈ = −sin θ − 0.1θ̇. Centres (undamped) become stable spirals with damping.'
+  },
+  lv:{
+    f:(x,y)=>[x*(1-x)-x*y/(x+0.1+0.2), y*(-0.5+x/(x+0.1+0.2))],
+    info:()=>'Rosenzweig-MacArthur predator-prey. Shows limit cycles near the coexistence equilibrium.'
+  }
+};
+
+function rk4step(x,y,dt){
+  const fn=systems[sysKey].f;
+  const [k1x,k1y]=fn(x,y);
+  const [k2x,k2y]=fn(x+dt/2*k1x,y+dt/2*k1y);
+  const [k3x,k3y]=fn(x+dt/2*k2x,y+dt/2*k2y);
+  const [k4x,k4y]=fn(x+dt*k3x,y+dt*k3y);
+  return [x+dt*(k1x+2*k2x+2*k3x+k4x)/6, y+dt*(k1y+2*k2y+2*k3y+k4y)/6];
+}
+
+function drawVectorField(){
+  const ng=18;
+  for(let i=0;i<=ng;i++){
+    for(let j=0;j<=ng;j++){
+      const x=XMIN+i*(XMAX-XMIN)/ng, y=YMIN+j*(YMAX-YMIN)/ng;
+      const [dx,dy]=systems[sysKey].f(x,y);
+      const mag=Math.hypot(dx,dy);
+      if(mag<1e-6) continue;
+      const len=Math.min(mag,3)/3*12;
+      const ux=dx/mag,uy=dy/mag;
+      const xp=px(x),yp=py(y);
+      const alpha=Math.min(mag/3,1)*0.4+0.1;
+      cx.strokeStyle=`rgba(126,200,255,${alpha})`;cx.lineWidth=1;
+      cx.beginPath();cx.moveTo(xp,yp);cx.lineTo(xp+ux*len,yp-uy*len);cx.stroke();
+      // Arrow head
+      const ex=xp+ux*len,ey=yp-uy*len;
+      const ang=Math.atan2(-uy,ux);
+      cx.fillStyle=`rgba(126,200,255,${alpha+0.1})`;
+      cx.beginPath();
+      cx.moveTo(ex,ey);
+      cx.lineTo(ex-5*Math.cos(ang-0.4),ey+5*Math.sin(ang-0.4));
+      cx.lineTo(ex-5*Math.cos(ang+0.4),ey+5*Math.sin(ang+0.4));
+      cx.fill();
+    }
+  }
+}
+
+function drawNullclines(){
+  // x-nullcline: dx/dt=0 (draw as dots where |dx|<threshold)
+  // y-nullcline: dy/dt=0
+  const fn=systems[sysKey].f;
+  const ns=200;
+  for(let i=0;i<=ns;i++){
+    for(let j=0;j<=ns;j++){
+      const x=XMIN+i*(XMAX-XMIN)/ns, y=YMIN+j*(YMAX-YMIN)/ns;
+      const [dx,dy]=fn(x,y);
+      const thr=0.15*(XMAX-XMIN)/ns*ns/40;
+      if(Math.abs(dx)<thr){
+        cx.fillStyle='#7ec8ff33';cx.fillRect(px(x)-1,py(y)-1,2,2);
+      }
+      if(Math.abs(dy)<thr){
+        cx.fillStyle='#50dd8033';cx.fillRect(px(x)-1,py(y)-1,2,2);
+      }
+    }
+  }
+}
+
+const COLORS=['#f0c040','#ff6688','#50dd80','#c080ff','#ff9944','#44ddff','#ffcc44','#88ff88'];
+
+function drawTrajs(){
+  trajs.forEach((traj,ti)=>{
+    const col=COLORS[ti%COLORS.length];
+    if(traj.pts.length<2) return;
+    cx.strokeStyle=col;cx.lineWidth=1.5;cx.globalAlpha=0.85;
+    cx.beginPath();
+    traj.pts.forEach((p,i)=>{
+      const xp=px(p[0]),yp=py(p[1]);
+      i===0?cx.moveTo(xp,yp):cx.lineTo(xp,yp);
+    });
+    cx.stroke();cx.globalAlpha=1;
+    // Current dot
+    const last=traj.pts[traj.pts.length-1];
+    cx.beginPath();cx.arc(px(last[0]),py(last[1]),5,0,2*Math.PI);
+    cx.fillStyle=col;cx.shadowColor=col;cx.shadowBlur=8;cx.fill();cx.shadowBlur=0;
+  });
+}
+
+function drawBase(){
+  cx.clearRect(0,0,W,H);cx.fillStyle='#0d0d1a';cx.fillRect(0,0,W,H);
+  // Grid
+  cx.strokeStyle='#131326';cx.lineWidth=1;
+  for(let xv=Math.ceil(XMIN);xv<=XMAX;xv++){cx.beginPath();cx.moveTo(px(xv),PAD);cx.lineTo(px(xv),PAD+PH);cx.stroke();}
+  for(let yv=Math.ceil(YMIN);yv<=YMAX;yv++){cx.beginPath();cx.moveTo(PAD,py(yv));cx.lineTo(PAD+PW,py(yv));cx.stroke();}
+  // Axes
+  cx.strokeStyle='#252540';cx.lineWidth=1.5;
+  cx.beginPath();cx.moveTo(PAD,py(0));cx.lineTo(PAD+PW,py(0));cx.stroke();
+  cx.beginPath();cx.moveTo(px(0),PAD);cx.lineTo(px(0),PAD+PH);cx.stroke();
+  // Labels
+  cx.fillStyle='#444';cx.font='11px monospace';cx.textAlign='center';
+  for(let xv=Math.ceil(XMIN);xv<=XMAX;xv++){
+    if(xv===0) continue;
+    cx.fillText(xv,px(xv),PAD+PH+14);
+  }
+  cx.textAlign='right';
+  for(let yv=Math.ceil(YMIN);yv<=YMAX;yv++){
+    if(yv===0) continue;
+    cx.fillText(yv,PAD-5,py(yv)+4);
+  }
+  cx.fillStyle='#3a3a60';cx.font='12px sans-serif';cx.textAlign='center';
+  cx.fillText('x',PAD+PW/2,H-4);
+  cx.save();cx.translate(12,PAD+PH/2);cx.rotate(-Math.PI/2);cx.fillText('y',0,0);cx.restore();
+  // Nullcline legend
+  cx.fillStyle='#7ec8ff55';cx.font='10px sans-serif';cx.textAlign='left';
+  cx.fillText('· x-nullcline',PAD+4,PAD+14);
+  cx.fillStyle='#50dd8055';cx.fillText('· y-nullcline',PAD+90,PAD+14);
+}
+
+function animate(){
+  drawBase();
+  drawNullclines();
+  drawVectorField();
+  // Advance trajectories
+  trajs.forEach(traj=>{
+    if(!traj.done){
+      const last=traj.pts[traj.pts.length-1];
+      for(let k=0;k<8;k++){
+        const[nx,ny]=rk4step(last[0],last[1],0.012);
+        if(!isFinite(nx)||!isFinite(ny)||Math.abs(nx)>8||Math.abs(ny)>8){traj.done=true;break;}
+        traj.pts.push([nx,ny]);
+        if(traj.pts.length>1200) traj.pts.shift();
+      }
+    }
+  });
+  drawTrajs();
+  // Info
+  const infoFn=systems[sysKey].info;
+  document.getElementById('info').textContent=infoFn(a,b,c,d);
+  frameId=requestAnimationFrame(animate);
+}
+
+function sync(){
+  a=+document.getElementById('sa').value;
+  b=+document.getElementById('sb').value;
+  c=+document.getElementById('sc').value;
+  d=+document.getElementById('sd').value;
+  sysKey=document.getElementById('sys').value;
+  document.getElementById('av').textContent=a.toFixed(1);
+  document.getElementById('bv').textContent=b.toFixed(1);
+  document.getElementById('cv2').textContent=c.toFixed(1);
+  document.getElementById('dv').textContent=d.toFixed(1);
+  // Show/hide parameter sliders based on system
+  const showABCD=sysKey==='linear';
+  ['sa','sb','sc','sd'].forEach((id,i)=>{
+    const sg=document.getElementById(id).parentElement;
+    sg.style.opacity=showABCD?'1':'0.3';
+  });
+}
+
+cv.addEventListener('click',e=>{
+  const rect=cv.getBoundingClientRect();
+  const scale=W/rect.width;
+  const xp=(e.clientX-rect.left)*scale;
+  const yp=(e.clientY-rect.top)*scale;
+  const x=ix(xp),y=iy(yp);
+  if(trajs.length>=8) trajs.shift();
+  trajs.push({pts:[[x,y]],done:false});
+});
+
+document.getElementById('clr').addEventListener('click',()=>{trajs=[];});
+['sa','sb','sc','sd'].forEach(id=>document.getElementById(id).addEventListener('input',sync));
+document.getElementById('sys').addEventListener('change',()=>{sync();trajs=[];});
+
+sync();
+if(frameId) cancelAnimationFrame(frameId);
+animate();
+</script>

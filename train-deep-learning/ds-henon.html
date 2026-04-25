@@ -1,0 +1,189 @@
+---
+layout: embed
+title: DS Lab 7 – Hénon Map & Strange Attractor
+permalink: /train-deep-learning/ds-henon/
+---
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:system-ui,sans-serif;background:#0d0d1a;color:#ccc;padding:10px}
+#app{max-width:760px;margin:0 auto}
+.ctrl{display:flex;flex-wrap:wrap;gap:10px;align-items:center;background:#141426;border-radius:8px;padding:10px 14px;margin-bottom:8px}
+.sg{display:flex;flex-direction:column;gap:3px;min-width:120px}
+.sg label{font-size:12px;color:#888}.sg label b{color:#7ec8ff}
+input[type=range]{width:100%;accent-color:#7ec8ff}
+.btn{background:transparent;border:1px solid #7ec8ff66;color:#7ec8ffaa;border-radius:5px;padding:5px 12px;cursor:pointer;font-size:12px}
+.btn:hover{border-color:#7ec8ff;color:#7ec8ff}
+canvas{display:block;width:100%;border-radius:8px;margin:6px 0}
+.info{background:#141426;border-radius:8px;padding:8px 14px;font-size:12px;color:#888;line-height:1.7}
+</style>
+<div id="app">
+  <div class="ctrl">
+    <div class="sg">
+      <label>a = <b id="av">1.40</b></label>
+      <input type="range" id="sa" min="0.5" max="1.9" step="0.01" value="1.4">
+    </div>
+    <div class="sg">
+      <label>b = <b id="bv">0.30</b></label>
+      <input type="range" id="sb" min="-0.5" max="0.5" step="0.01" value="0.3">
+    </div>
+    <div class="sg">
+      <label>Zoom = <b id="zv">1.0</b>×</label>
+      <input type="range" id="sz" min="1" max="20" step="0.5" value="1">
+    </div>
+    <div class="sg">
+      <label>Color mode</label>
+      <select id="cm" style="background:#1a1a30;border:1px solid #2a2a50;color:#ccc;padding:4px 8px;border-radius:5px;font-size:12px">
+        <option value="density">Density</option>
+        <option value="age" selected>Age</option>
+        <option value="velocity">Velocity</option>
+      </select>
+    </div>
+    <button class="btn" id="rst">↺ Reset</button>
+  </div>
+  <canvas id="cv" width="740" height="480"></canvas>
+  <div class="info" id="info">The Hénon map: xₙ₊₁ = 1 − axₙ² + yₙ &nbsp; yₙ₊₁ = bxₙ. Classic parameters a=1.4, b=0.3 produce a strange attractor.</div>
+</div>
+<script>
+const cv=document.getElementById('cv'),cx=cv.getContext('2d');
+const W=740,H=480;
+let a=1.4,b=0.3,zoom=1,colMode='age';
+let pts=[],x=0,y=0,n=0,escaped=false;
+let panX=0,panY=0;
+
+const XMIN=-1.8,XMAX=1.8,YMIN=-0.5,YMAX=0.5;
+const PAD=20;
+
+function mapPt(px,py){
+  const cx0=W/2+panX,cy0=H/2+panY;
+  const scaleX=W/(XMAX-XMIN)*zoom;
+  const scaleY=H/(YMAX-YMIN)*zoom*((H-2*PAD)/H);
+  return[cx0+(px-(XMIN+XMAX)/2)*scaleX, cy0-(py-(YMIN+YMAX)/2)*scaleY];
+}
+
+function init(){
+  x=0.1+(Math.random()-0.5)*0.05;
+  y=0.1+(Math.random()-0.5)*0.05;
+  pts=[];n=0;escaped=false;
+}
+
+function step(steps){
+  for(let k=0;k<steps;k++){
+    const nx=1-a*x*x+y, ny=b*x;
+    if(!isFinite(nx)||!isFinite(ny)||Math.abs(nx)>10||Math.abs(ny)>10){
+      escaped=true;break;
+    }
+    pts.push([nx,ny,n]);
+    x=nx;y=ny;n++;
+    if(pts.length>120000) pts.shift();
+  }
+}
+
+// Offscreen canvas for accumulation
+const oc=document.createElement('canvas');oc.width=W;oc.height=H;
+const oc2=oc.getContext('2d');
+let dirty=true;
+
+function draw(){
+  cx.clearRect(0,0,W,H);cx.fillStyle='#050510';cx.fillRect(0,0,W,H);
+
+  if(escaped){
+    cx.fillStyle='#ff668888';cx.font='14px sans-serif';cx.textAlign='center';
+    cx.fillText('Orbit escaped to infinity — try different a, b values',W/2,H/2);
+    return;
+  }
+
+  // Draw points
+  const N=pts.length;
+  if(N>0){
+    const imgData=cx.createImageData(W,H);
+    const d=imgData.data;
+    pts.forEach(([px,py,age])=>{
+      const[sx,sy]=mapPt(px,py);
+      const ix=Math.round(sx),iy=Math.round(sy);
+      if(ix<0||ix>=W||iy<0||iy>=H) return;
+      const idx=(iy*W+ix)*4;
+      let r=0,g=0,bl=0,al=255;
+      if(colMode==='age'){
+        const t=age/N;
+        r=Math.round(50+t*200);g=Math.round(100+t*100);bl=Math.round(200-t*100);
+      } else if(colMode==='density'){
+        d[idx]+=15;d[idx+1]+=8;d[idx+2]+=30;
+        d[idx+3]=255;return;
+      } else { // velocity
+        const vx=px*px+py*py;
+        const t=Math.min(vx/2,1);
+        r=Math.round(255*t);g=Math.round(200*(1-t));bl=Math.round(100);
+      }
+      if(d[idx+3]<255){d[idx]=r;d[idx+1]=g;d[idx+2]=bl;d[idx+3]=al;}
+      else{d[idx]=Math.min(255,d[idx]+r>>1);d[idx+1]=Math.min(255,d[idx+1]+g>>1);d[idx+2]=Math.min(255,d[idx+2]+bl>>1);}
+    });
+    cx.putImageData(imgData,0,0);
+  }
+
+  // Grid overlay (faint)
+  cx.strokeStyle='#1a1a30';cx.lineWidth=0.5;
+  for(let xv=-1.5;xv<=1.5;xv+=0.5){
+    const[xp]=mapPt(xv,0);
+    cx.beginPath();cx.moveTo(xp,PAD);cx.lineTo(xp,H-PAD);cx.stroke();
+  }
+  for(let yv=-0.4;yv<=0.4;yv+=0.2){
+    const[,yp]=mapPt(0,yv);
+    cx.beginPath();cx.moveTo(PAD,yp);cx.lineTo(W-PAD,yp);cx.stroke();
+  }
+  // Axes
+  const[x0]=mapPt(0,0);const[,y0]=mapPt(0,0);
+  cx.strokeStyle='#252540';cx.lineWidth=1;
+  cx.beginPath();cx.moveTo(PAD,y0);cx.lineTo(W-PAD,y0);cx.stroke();
+  cx.beginPath();cx.moveTo(x0,PAD);cx.lineTo(x0,H-PAD);cx.stroke();
+
+  // Labels
+  cx.fillStyle='#3a3a60';cx.font='10px monospace';cx.textAlign='center';
+  [-1.5,-1,-0.5,0.5,1,1.5].forEach(v=>{const[xp]=mapPt(v,0);cx.fillText(v,xp,H-6);});
+  cx.textAlign='right';
+  [-0.4,-0.2,0.2,0.4].forEach(v=>{const[,yp]=mapPt(0,v);cx.fillText(v.toFixed(1),PAD+22,yp+4);});
+
+  // HUD
+  cx.fillStyle='#444';cx.font='11px monospace';cx.textAlign='left';
+  cx.fillText(`a=${a.toFixed(2)}  b=${b.toFixed(2)}  pts: ${pts.length.toLocaleString()}`,PAD+4,14);
+  cx.fillStyle='#3a3a60';cx.textAlign='right';
+  cx.fillText(`zoom ${zoom.toFixed(1)}×`,W-PAD,14);
+}
+
+let lastT=null;
+function frame(t){
+  if(lastT===null) lastT=t;
+  const rdt=Math.min((t-lastT)/1000,0.05);
+  lastT=t;
+  if(!escaped) step(Math.round(rdt*4000));
+  draw();
+  document.getElementById('info').innerHTML=
+    `a = ${a.toFixed(2)} &nbsp; b = ${b.toFixed(2)} &nbsp;|&nbsp; `+
+    `${pts.length.toLocaleString()} points accumulated`+
+    (a===1.4&&Math.abs(b-0.3)<0.01?' &nbsp;|&nbsp; <span style="color:#f0c040">Classic Hénon parameters — Hausdorff dimension ≈ 1.26</span>':'');
+  requestAnimationFrame(frame);
+}
+
+function sync(){
+  const prevA=a,prevB=b;
+  a=+document.getElementById('sa').value;
+  b=+document.getElementById('sb').value;
+  zoom=+document.getElementById('sz').value;
+  colMode=document.getElementById('cm').value;
+  document.getElementById('av').textContent=a.toFixed(2);
+  document.getElementById('bv').textContent=b.toFixed(2);
+  document.getElementById('zv').textContent=zoom.toFixed(1);
+  if(prevA!==a||prevB!==b) init();
+}
+
+document.getElementById('rst').addEventListener('click',()=>{sync();init();});
+['sa','sb','sz'].forEach(id=>document.getElementById(id).addEventListener('input',sync));
+document.getElementById('cm').addEventListener('change',sync);
+
+// Drag to pan
+let dragging=false,dragStart=[0,0],panStart=[0,0];
+cv.addEventListener('mousedown',e=>{dragging=true;dragStart=[e.clientX,e.clientY];panStart=[panX,panY];});
+cv.addEventListener('mousemove',e=>{if(!dragging) return;panX=panStart[0]+(e.clientX-dragStart[0]);panY=panStart[1]+(e.clientY-dragStart[1]);});
+cv.addEventListener('mouseup',()=>dragging=false);cv.addEventListener('mouseleave',()=>dragging=false);
+
+sync();init();requestAnimationFrame(frame);
+</script>

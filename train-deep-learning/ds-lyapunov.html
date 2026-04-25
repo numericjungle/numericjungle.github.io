@@ -1,0 +1,233 @@
+---
+layout: embed
+title: DS Lab 6 – Lyapunov Exponents
+permalink: /train-deep-learning/ds-lyapunov/
+---
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:system-ui,sans-serif;background:#0d0d1a;color:#ccc;padding:10px}
+#app{max-width:760px;margin:0 auto}
+.ctrl{display:flex;flex-wrap:wrap;gap:10px;align-items:center;background:#141426;border-radius:8px;padding:10px 14px;margin-bottom:8px}
+.sg{display:flex;flex-direction:column;gap:3px;min-width:130px}
+.sg label{font-size:12px;color:#888}.sg label b{color:#7ec8ff}
+input[type=range]{width:100%;accent-color:#7ec8ff}
+canvas{display:block;width:100%;border-radius:8px;margin:6px 0}
+.info{background:#141426;border-radius:8px;padding:8px 14px;font-size:12px;color:#888;line-height:1.8}
+</style>
+<div id="app">
+  <div class="ctrl">
+    <div class="sg">
+      <label>Parameter r = <b id="rv">3.70</b></label>
+      <input type="range" id="sr" min="2.5" max="4.0" step="0.01" value="3.7">
+    </div>
+    <div class="sg">
+      <label>Iterations N = <b id="nv">200</b></label>
+      <input type="range" id="sn" min="50" max="500" step="10" value="200">
+    </div>
+  </div>
+  <canvas id="cv" width="740" height="520"></canvas>
+  <div class="info" id="info">—</div>
+</div>
+<script>
+const cv=document.getElementById('cv'),cx=cv.getContext('2d');
+const W=740,H=520;
+let curR=3.7,N=200;
+
+// Pre-compute bifurcation diagram + Lyapunov exponent for all r
+const NR=700;
+const RMIN=2.5,RMAX=4.0;
+const bifData=new Array(NR);
+const lyapData=new Array(NR);
+
+function logistic(x,r){return r*x*(1-x);}
+
+function computeAll(){
+  for(let i=0;i<NR;i++){
+    const r=RMIN+i*(RMAX-RMIN)/(NR-1);
+    let x=0.5;
+    // Burn-in
+    for(let k=0;k<300;k++) x=logistic(x,r);
+    // Collect orbit
+    const orbit=[];
+    for(let k=0;k<N;k++){x=logistic(x,r);orbit.push(x);}
+    bifData[i]=orbit;
+    // Lyapunov exponent
+    x=0.5;
+    for(let k=0;k<200;k++) x=logistic(x,r);
+    let le=0,valid=true;
+    for(let k=0;k<500;k++){
+      const deriv=Math.abs(r*(1-2*x));
+      if(deriv<1e-12){valid=false;break;}
+      le+=Math.log(deriv);
+      x=logistic(x,r);
+    }
+    lyapData[i]=valid?le/500:NaN;
+  }
+}
+
+const PAD={l:50,r:15,t:20};
+const SPLIT=H*0.55; // y split between bif diagram and lyapunov
+const BH=SPLIT-PAD.t-10;
+const LH=H-SPLIT-30;
+const PW=W-PAD.l-PAD.r;
+
+function rp(r){return PAD.l+(r-RMIN)/(RMAX-RMIN)*PW;}
+
+function drawBifDiagram(){
+  // Background
+  cx.fillStyle='#0a0a18';cx.fillRect(PAD.l,PAD.t,PW,BH);
+  // Title
+  cx.fillStyle='#555';cx.font='11px monospace';cx.textAlign='left';
+  cx.fillText('Bifurcation diagram  xₙ vs r',PAD.l+4,PAD.t+12);
+  // Axis
+  cx.strokeStyle='#252540';cx.lineWidth=1;
+  cx.beginPath();cx.moveTo(PAD.l,PAD.t+BH);cx.lineTo(PAD.l+PW,PAD.t+BH);cx.stroke();
+  cx.beginPath();cx.moveTo(PAD.l,PAD.t);cx.lineTo(PAD.l,PAD.t+BH);cx.stroke();
+  // Y ticks
+  cx.fillStyle='#444';cx.font='10px monospace';cx.textAlign='right';
+  [0,0.25,0.5,0.75,1].forEach(v=>{
+    const yp=PAD.t+BH-(v*BH);
+    cx.fillText(v.toFixed(2),PAD.l-3,yp+4);
+  });
+  // Plot
+  for(let i=0;i<NR;i++){
+    const r=RMIN+i*(RMAX-RMIN)/(NR-1);
+    const xp=rp(r);
+    const orbit=bifData[i];
+    orbit.forEach(x=>{
+      const yp=PAD.t+BH-(x*BH);
+      cx.fillStyle='rgba(126,200,255,0.5)';
+      cx.fillRect(xp-0.4,yp-0.4,0.8,0.8);
+    });
+  }
+}
+
+function drawLyapunov(){
+  const top=SPLIT+10;
+  cx.fillStyle='#0a0a18';cx.fillRect(PAD.l,top,PW,LH);
+  // Zero line
+  const zy=top+LH/2;
+  cx.strokeStyle='#252540';cx.lineWidth=1.5;cx.setLineDash([4,4]);
+  cx.beginPath();cx.moveTo(PAD.l,zy);cx.lineTo(PAD.l+PW,zy);cx.stroke();
+  cx.setLineDash([]);
+  // Title & axis
+  cx.fillStyle='#555';cx.font='11px monospace';cx.textAlign='left';
+  cx.fillText('Lyapunov exponent λ(r)',PAD.l+4,top+12);
+  cx.strokeStyle='#252540';cx.lineWidth=1;
+  cx.beginPath();cx.moveTo(PAD.l,top);cx.lineTo(PAD.l,top+LH);cx.stroke();
+  cx.beginPath();cx.moveTo(PAD.l,top+LH);cx.lineTo(PAD.l+PW,top+LH);cx.stroke();
+
+  // Y range
+  const vals=lyapData.filter(v=>isFinite(v));
+  const lyMin=Math.max(Math.min(...vals),-2.5),lyMax=Math.min(Math.max(...vals),1);
+  function lyY(v){return top+LH-(v-lyMin)/(lyMax-lyMin)*LH;}
+  const zy2=lyY(0);
+
+  // Zero baseline label
+  cx.fillStyle='#444';cx.font='10px monospace';cx.textAlign='right';
+  cx.fillText('0',PAD.l-3,zy2+4);
+  [lyMin,lyMax*0.7].forEach(v=>{
+    cx.fillText(v.toFixed(1),PAD.l-3,lyY(v)+4);
+  });
+
+  // Fill chaos region
+  cx.beginPath();
+  let inChaos=false;
+  for(let i=0;i<NR;i++){
+    const v=lyapData[i];if(!isFinite(v)) continue;
+    const xp=rp(RMIN+i*(RMAX-RMIN)/(NR-1));
+    if(v>0){
+      if(!inChaos){cx.moveTo(xp,zy2);inChaos=true;}
+      cx.lineTo(xp,lyY(v));
+    } else {
+      if(inChaos){cx.lineTo(xp,zy2);inChaos=false;}
+    }
+  }
+  if(inChaos) cx.lineTo(rp(RMAX),zy2);
+  cx.fillStyle='rgba(240,100,100,0.15)';cx.fill();
+
+  // Lyapunov curve
+  cx.beginPath();cx.lineWidth=1.5;
+  let first=true;
+  for(let i=0;i<NR;i++){
+    const v=lyapData[i];if(!isFinite(v)){first=true;continue;}
+    const xp=rp(RMIN+i*(RMAX-RMIN)/(NR-1));
+    const yp=lyY(v);
+    if(yp<top-5||yp>top+LH+5){first=true;continue;}
+    cx.strokeStyle=v>0?'#ff6688':'#50dd80';
+    if(first){cx.moveTo(xp,yp);first=false;}
+    else cx.lineTo(xp,yp);
+    // Flush segment on color change
+  }
+  cx.stroke();
+
+  // Labels
+  cx.fillStyle='#50dd8088';cx.font='10px sans-serif';cx.textAlign='left';
+  cx.fillText('λ < 0  order',PAD.l+4,top+LH-6);
+  cx.fillStyle='#ff668888';cx.fillText('λ > 0  chaos',PAD.l+100,top+4+12);
+}
+
+function drawCurrentR(){
+  const xp=rp(curR);
+  // Vertical cursor
+  cx.strokeStyle='#f0c04066';cx.lineWidth=1.5;cx.setLineDash([4,5]);
+  cx.beginPath();cx.moveTo(xp,PAD.t);cx.lineTo(xp,H-10);cx.stroke();
+  cx.setLineDash([]);
+  // r label
+  cx.fillStyle='#f0c040';cx.font='bold 11px monospace';cx.textAlign='center';
+  cx.fillText(`r=${curR.toFixed(2)}`,xp,H-2);
+  // Dot on Lyapunov
+  const ri=Math.round((curR-RMIN)/(RMAX-RMIN)*(NR-1));
+  if(ri>=0&&ri<NR&&isFinite(lyapData[ri])){
+    const top=SPLIT+10;
+    const vals=lyapData.filter(v=>isFinite(v));
+    const lyMin=Math.max(Math.min(...vals),-2.5),lyMax=Math.min(Math.max(...vals),1);
+    const yp=top+LH-(lyapData[ri]-lyMin)/(lyMax-lyMin)*LH;
+    cx.beginPath();cx.arc(xp,yp,5,0,2*Math.PI);
+    cx.fillStyle='#f0c040';cx.shadowColor='#f0c040';cx.shadowBlur=10;cx.fill();cx.shadowBlur=0;
+  }
+  // r-axis ticks
+  cx.fillStyle='#444';cx.font='10px monospace';cx.textAlign='center';
+  [2.5,3.0,3.5,3.57,4.0].forEach(v=>{
+    const xp2=rp(v);
+    cx.fillText(v.toFixed(2),xp2,SPLIT+6);
+  });
+}
+
+function draw(){
+  cx.clearRect(0,0,W,H);cx.fillStyle='#0d0d1a';cx.fillRect(0,0,W,H);
+  drawBifDiagram();
+  drawLyapunov();
+  drawCurrentR();
+  // Info
+  const ri=Math.round((curR-RMIN)/(RMAX-RMIN)*(NR-1));
+  const le=ri>=0&&ri<NR?lyapData[ri]:NaN;
+  const orbit=bifData[ri]||[];
+  // Detect period
+  let periodStr='—';
+  if(orbit.length>4){
+    const last=orbit[orbit.length-1];
+    for(let p=1;p<=16;p++){
+      if(Math.abs(orbit[orbit.length-1-p]-last)<0.002){periodStr=`${p}`;break;}
+    }
+  }
+  document.getElementById('info').innerHTML=
+    `r = ${curR.toFixed(2)} &nbsp;|&nbsp; λ = ${isFinite(le)?le.toFixed(4):'—'} &nbsp;|&nbsp; `+
+    `<span style="color:${isFinite(le)&&le>0?'#ff6688':'#50dd80'}">${isFinite(le)&&le>0?'CHAOTIC':'ORDERED'}</span>`+
+    ` &nbsp;|&nbsp; apparent period ≈ ${periodStr}`;
+}
+
+computeAll();
+
+function sync(){
+  curR=+document.getElementById('sr').value;
+  N=+document.getElementById('sn').value;
+  document.getElementById('rv').textContent=curR.toFixed(2);
+  document.getElementById('nv').textContent=N;
+  computeAll();draw();
+}
+
+document.getElementById('sr').addEventListener('input',sync);
+document.getElementById('sn').addEventListener('input',sync);
+sync();
+</script>

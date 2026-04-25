@@ -1,0 +1,229 @@
+---
+layout: embed
+title: DS Lab 2 – Bifurcation Diagram Explorer
+permalink: /train-deep-learning/ds-bifurcations/
+---
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:system-ui,sans-serif;background:#0d0d1a;color:#ccc;padding:10px}
+#app{max-width:740px;margin:0 auto}
+.ctrl{display:flex;flex-wrap:wrap;gap:10px;align-items:center;background:#141426;border-radius:8px;padding:10px 14px;margin-bottom:8px}
+.sg{display:flex;flex-direction:column;gap:3px;min-width:140px}
+.sg label{font-size:12px;color:#888}.sg label b{color:#7ec8ff}
+input[type=range]{width:100%;accent-color:#7ec8ff}
+select{background:#1a1a30;border:1px solid #2a2a50;color:#ccc;padding:4px 8px;border-radius:5px;font-size:12px;min-width:170px}
+canvas{display:block;width:100%;border-radius:8px;margin:6px 0}
+.info{background:#141426;border-radius:8px;padding:8px 14px;font-size:12px;color:#888;line-height:1.8}
+</style>
+<div id="app">
+  <div class="ctrl">
+    <div class="sg">
+      <label>Bifurcation type</label>
+      <select id="btype">
+        <option value="saddle">Saddle-node:  ẋ = r − x²</option>
+        <option value="trans">Transcritical:  ẋ = rx − x²</option>
+        <option value="pitch" selected>Pitchfork (super):  ẋ = rx − x³</option>
+        <option value="sub">Pitchfork (sub):  ẋ = rx + x³ − x⁵</option>
+      </select>
+    </div>
+    <div class="sg">
+      <label>Current r = <b id="rv">0.00</b></label>
+      <input type="range" id="sr" min="-2.5" max="2.5" step="0.05" value="0">
+    </div>
+  </div>
+  <canvas id="cv" width="720" height="460"></canvas>
+  <div class="info" id="info">—</div>
+</div>
+<script>
+const cv=document.getElementById('cv'),cx=cv.getContext('2d');
+const W=720,H=460;
+const PAD={l:55,r:20,t:30,b:40};
+const PW=W-PAD.l-PAD.r,PH=H-PAD.t-PAD.b;
+const RMIN=-2.5,RMAX=2.5,XMIN=-2.5,XMAX=2.5;
+
+function mapR(r){return PAD.l+(r-RMIN)/( RMAX-RMIN)*PW;}
+function mapX(x){return PAD.t+(1-(x-XMIN)/(XMAX-XMIN))*PH;}
+
+const btypes={
+  saddle:{
+    label:'Saddle-node  ẋ = r − x²',
+    fp:(r)=>{
+      if(r<0) return [];
+      if(Math.abs(r)<1e-6) return [{x:0,stab:false}];// degenerate
+      const s=Math.sqrt(r);
+      return [{x:s,stab:true},{x:-s,stab:false}];
+    },
+    note:'Bifurcation at r = 0. For r < 0: no fixed points. For r > 0: two fixed points born in a collision (saddle-node event).'
+  },
+  trans:{
+    label:'Transcritical  ẋ = rx − x²',
+    fp:(r)=>[{x:0,stab:r<0},{x:r,stab:r>0}],
+    note:'Fixed points always exist (x*=0 and x*=r) but exchange stability at r = 0.'
+  },
+  pitch:{
+    label:'Supercritical pitchfork  ẋ = rx − x³',
+    fp:(r)=>{
+      if(r<=0) return [{x:0,stab:true}];
+      return [{x:0,stab:false},{x:Math.sqrt(r),stab:true},{x:-Math.sqrt(r),stab:true}];
+    },
+    note:'x*=0 loses stability at r=0. Two stable branches bifurcate — the hallmark of symmetry-breaking.'
+  },
+  sub:{
+    label:'Subcritical pitchfork  ẋ = rx + x³ − x⁵',
+    fp:(r)=>{
+      // x*(rx+x³-x⁵)=0 → x=0 or rx+x²-x⁴=0 → solve numerically
+      const fps=[{x:0,stab:r<0}];
+      const scan=500;
+      for(let i=0;i<scan;i++){
+        const a=-2.5+i*5/scan,b=a+5/scan;
+        const f=x=>r*x+x*x*x-x*x*x*x*x;
+        const fa=f(a),fb=f(b);
+        if(Math.abs(a)<0.05) continue;
+        if(fa*fb<0){
+          let lo=a,hi=b;
+          for(let k=0;k<30;k++){const m=(lo+hi)/2;f(m)*fa<=0?hi=m:lo=m;}
+          const z=(lo+hi)/2;
+          const df=x=>(f(x+1e-5)-f(x-1e-5))/2e-5;
+          fps.push({x:z,stab:df(z)<0});
+        }
+      }
+      return fps;
+    },
+    note:'Subcritical: two unstable branches exist for r<0 alongside a stable x*=0. A hysteresis loop and hard loss of stability occur.'
+  }
+};
+
+let curR=0,bkey='pitch';
+
+function draw(){
+  const bt=btypes[bkey];
+  cx.clearRect(0,0,W,H);
+  cx.fillStyle='#0d0d1a';cx.fillRect(0,0,W,H);
+
+  // Grid
+  cx.strokeStyle='#131326';cx.lineWidth=1;
+  for(let rv=Math.ceil(RMIN);rv<=RMAX;rv++){
+    const xp=mapR(rv);
+    cx.beginPath();cx.moveTo(xp,PAD.t);cx.lineTo(xp,PAD.t+PH);cx.stroke();
+  }
+  for(let xv=Math.ceil(XMIN);xv<=XMAX;xv++){
+    const yp=mapX(xv);
+    cx.beginPath();cx.moveTo(PAD.l,yp);cx.lineTo(PAD.l+PW,yp);cx.stroke();
+  }
+
+  // Axes
+  const x0=mapX(0);
+  cx.strokeStyle='#252540';cx.lineWidth=1.5;
+  cx.beginPath();cx.moveTo(PAD.l,x0);cx.lineTo(PAD.l+PW,x0);cx.stroke();
+  const r0=mapR(0);
+  cx.beginPath();cx.moveTo(r0,PAD.t);cx.lineTo(r0,PAD.t+PH);cx.stroke();
+
+  // Tick labels
+  cx.fillStyle='#444';cx.font='11px monospace';cx.textAlign='center';
+  for(let rv=Math.ceil(RMIN);rv<=RMAX;rv++) cx.fillText(rv,mapR(rv),PAD.t+PH+16);
+  cx.textAlign='right';
+  for(let xv=Math.ceil(XMIN);xv<=XMAX;xv++) cx.fillText(xv,PAD.l-6,mapX(xv)+4);
+  cx.fillStyle='#3a3a60';cx.textAlign='center';
+  cx.fillText('r  (parameter)',PAD.l+PW/2,H-6);
+  cx.save();cx.translate(12,PAD.t+PH/2);cx.rotate(-Math.PI/2);cx.fillText('x*  (fixed point)',0,0);cx.restore();
+
+  // Draw bifurcation curves
+  const NR=800;
+  // Collect stable and unstable paths
+  const stabPts=[],unstabPts=[];
+  for(let i=0;i<=NR;i++){
+    const rv=RMIN+i*(RMAX-RMIN)/NR;
+    const fps=bt.fp(rv);
+    fps.forEach(fp=>{
+      (fp.stab?stabPts:unstabPts).push({r:rv,x:fp.x});
+    });
+  }
+
+  // Group into connected segments by proximity
+  function drawBranch(pts,style,dash){
+    if(!pts.length) return;
+    // Sort by r then draw segments
+    cx.strokeStyle=style;cx.lineWidth=2.2;
+    if(dash) cx.setLineDash([6,5]);
+    // Draw as scatter with small gaps ─ group by nearby x values
+    const tol=0.12;
+    let seg=[];
+    pts.forEach((p,i)=>{
+      if(i===0){seg=[p];return;}
+      const prev=pts[i-1];
+      if(Math.abs(p.r-prev.r)<(RMAX-RMIN)/NR*2&&Math.abs(p.x-prev.x)<tol){
+        seg.push(p);
+      } else {
+        if(seg.length>1){
+          cx.beginPath();
+          seg.forEach((s,j)=>{
+            const xp=mapR(s.r),yp=mapX(s.x);
+            j===0?cx.moveTo(xp,yp):cx.lineTo(xp,yp);
+          });
+          cx.stroke();
+        }
+        seg=[p];
+      }
+    });
+    if(seg.length>1){
+      cx.beginPath();
+      seg.forEach((s,j)=>{
+        const xp=mapR(s.r),yp=mapX(s.x);
+        j===0?cx.moveTo(xp,yp):cx.lineTo(xp,yp);
+      });
+      cx.stroke();
+    }
+    cx.setLineDash([]);
+  }
+
+  drawBranch(stabPts,'#50dd80',false);
+  drawBranch(unstabPts,'#ff6688',true);
+
+  // Current r line
+  const rxp=mapR(curR);
+  cx.strokeStyle='#f0c04066';cx.lineWidth=1.5;cx.setLineDash([4,5]);
+  cx.beginPath();cx.moveTo(rxp,PAD.t);cx.lineTo(rxp,PAD.t+PH);cx.stroke();
+  cx.setLineDash([]);
+
+  // Dots at current r
+  const cfps=bt.fp(curR);
+  cfps.forEach(fp=>{
+    const xp=mapR(curR),yp=mapX(fp.x);
+    cx.beginPath();cx.arc(xp,yp,7,0,2*Math.PI);
+    cx.fillStyle=fp.stab?'#50dd80':'#ff6688';
+    cx.shadowColor=fp.stab?'#50dd80':'#ff6688';cx.shadowBlur=12;cx.fill();cx.shadowBlur=0;
+    cx.strokeStyle='#0d0d1a';cx.lineWidth=1.5;cx.stroke();
+  });
+
+  // Bifurcation point annotation
+  cx.fillStyle='#f0c04088';cx.font='11px monospace';cx.textAlign='center';
+  cx.fillText('bifurcation',r0,PAD.t-8);
+  cx.strokeStyle='#f0c04044';cx.lineWidth=1;cx.setLineDash([2,4]);
+  cx.beginPath();cx.moveTo(r0,PAD.t);cx.lineTo(r0,PAD.t+14);cx.stroke();
+  cx.setLineDash([]);
+
+  // Legend
+  cx.fillStyle='#50dd80';cx.font='11px sans-serif';cx.textAlign='left';
+  cx.fillText('— stable',W-130,PAD.t+14);
+  cx.strokeStyle='#ff6688';cx.lineWidth=2;cx.setLineDash([5,4]);
+  cx.beginPath();cx.moveTo(W-75,PAD.t+10);cx.lineTo(W-56,PAD.t+10);cx.stroke();cx.setLineDash([]);
+  cx.fillStyle='#ff6688';cx.fillText('unstable',W-54,PAD.t+14);
+
+  // Info
+  const stabLabels=cfps.filter(f=>f.stab).map(f=>`x*=${f.x.toFixed(3)}`).join(', ')||'none';
+  const unstabLabels=cfps.filter(f=>!f.stab).map(f=>`x*=${f.x.toFixed(3)}`).join(', ')||'none';
+  document.getElementById('info').innerHTML=
+    `r = ${curR.toFixed(2)} &nbsp;|&nbsp; <span style="color:#50dd80">Stable:</span> ${stabLabels} &nbsp;|&nbsp; <span style="color:#ff6688">Unstable:</span> ${unstabLabels}<br><small>${bt.note}</small>`;
+}
+
+function sync(){
+  curR=+document.getElementById('sr').value;
+  bkey=document.getElementById('btype').value;
+  document.getElementById('rv').textContent=curR.toFixed(2);
+  draw();
+}
+
+document.getElementById('sr').addEventListener('input',sync);
+document.getElementById('btype').addEventListener('change',sync);
+sync();
+</script>

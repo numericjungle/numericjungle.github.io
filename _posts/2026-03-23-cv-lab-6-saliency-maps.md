@@ -1,5 +1,5 @@
 ---
-date: 2026-04-20 11:30:00.000000
+date: 2026-03-23 09:00:00.000000
 layout: post
 title: "CV Lab 6 - Saliency Maps"
 description: "Train a digit classifier, then compute occlusion sensitivity maps to see which pixels drive each prediction."

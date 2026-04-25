@@ -1,0 +1,254 @@
+---
+layout: embed
+title: DS Lab 1 – 1D Phase Line Explorer
+permalink: /train-deep-learning/ds-phase-line/
+---
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:system-ui,sans-serif;background:#0d0d1a;color:#ccc;padding:10px}
+#app{max-width:740px;margin:0 auto}
+.ctrl{display:flex;flex-wrap:wrap;gap:10px;align-items:center;background:#141426;border-radius:8px;padding:10px 14px;margin-bottom:8px}
+.sg{display:flex;flex-direction:column;gap:3px;min-width:130px}
+.sg label{font-size:12px;color:#888}
+.sg label b{color:#7ec8ff}
+input[type=range]{width:100%;accent-color:#7ec8ff}
+select{background:#1a1a30;border:1px solid #2a2a50;color:#ccc;padding:4px 8px;border-radius:5px;font-size:12px;min-width:160px}
+canvas{display:block;width:100%;border-radius:8px;margin:6px 0}
+.info{background:#141426;border-radius:8px;padding:8px 14px;font-size:12px;color:#888;line-height:1.8}
+</style>
+<div id="app">
+  <div class="ctrl">
+    <div class="sg">
+      <label>System</label>
+      <select id="sys">
+        <option value="saddle">ẋ = r − x²  (saddle-node)</option>
+        <option value="pitchfork" selected>ẋ = rx − x³  (pitchfork)</option>
+        <option value="trans">ẋ = rx − x²  (transcritical)</option>
+        <option value="sine">ẋ = sin(x)</option>
+        <option value="cubic">ẋ = x(1−x)(x+0.8)</option>
+      </select>
+    </div>
+    <div class="sg">
+      <label>Parameter r = <b id="rv">0.00</b></label>
+      <input type="range" id="sr" min="-2" max="2" step="0.05" value="0">
+    </div>
+    <div class="sg">
+      <label>Initial condition x₀ = <b id="x0v">0.50</b></label>
+      <input type="range" id="sx0" min="-2.8" max="2.8" step="0.1" value="0.5">
+    </div>
+  </div>
+  <canvas id="cv" width="720" height="420"></canvas>
+  <div class="info" id="info">Fixed points: —</div>
+</div>
+<script>
+const cv=document.getElementById('cv'),cx=cv.getContext('2d');
+const W=720,H=420;
+const PAD=44,PLH=240,PLBOT=PAD+PLH,PHLINE=PLBOT+70;
+const XMIN=-3.2,XMAX=3.2;
+
+const systems={
+  saddle:{f:(x,r)=>r-x*x},
+  pitchfork:{f:(x,r)=>r*x-x*x*x},
+  trans:{f:(x,r)=>r*x-x*x},
+  sine:{f:(x,r)=>Math.sin(x)},
+  cubic:{f:(x,r)=>x*(1-x)*(x+0.8)}
+};
+
+let r=0,x0=0.5,sysKey='pitchfork',trajX=0.5,simT=0;
+let fMin=-3,fMax=3;
+
+function mapX(x){return PAD+(x-XMIN)/(XMAX-XMIN)*(W-2*PAD);}
+function mapY(f){return PLBOT-(f-fMin)/(fMax-fMin)*PLH;}
+
+function findZeros(f,r){
+  const xs=[],n=600,dx=(XMAX-XMIN)/n;
+  for(let i=0;i<n;i++){
+    const a=XMIN+i*dx,b=a+dx,fa=f(a,r),fb=f(b,r);
+    if(fa*fb<=0){
+      let lo=a,hi=b;
+      for(let k=0;k<24;k++){const m=(lo+hi)/2;f(m,r)*fa<=0?hi=m:lo=m;}
+      xs.push((lo+hi)/2);
+    }
+  }
+  return xs;
+}
+
+function isStable(f,r,x){return (f(x+1e-5,r)-f(x-1e-5,r))/2e-5<0;}
+
+function draw(){
+  const fn=systems[sysKey].f;
+  let mn=Infinity,mx=-Infinity;
+  for(let i=0;i<=300;i++){
+    const x=XMIN+i*(XMAX-XMIN)/300,v=fn(x,r);
+    if(isFinite(v)){mn=Math.min(mn,v);mx=Math.max(mx,v);}
+  }
+  const rng=Math.max(Math.abs(mn),Math.abs(mx),0.8);
+  fMin=-rng*1.15;fMax=rng*1.15;
+
+  cx.clearRect(0,0,W,H);
+  cx.fillStyle='#0d0d1a';cx.fillRect(0,0,W,H);
+
+  // Grid
+  cx.strokeStyle='#131326';cx.lineWidth=1;
+  for(let xv=-3;xv<=3;xv++){
+    const xp=mapX(xv);
+    cx.beginPath();cx.moveTo(xp,PAD);cx.lineTo(xp,PLBOT);cx.stroke();
+  }
+  // Zero line
+  const y0=mapY(0);
+  cx.strokeStyle='#252540';cx.lineWidth=1.5;
+  cx.beginPath();cx.moveTo(PAD,y0);cx.lineTo(W-PAD,y0);cx.stroke();
+
+  // Axis ticks
+  cx.fillStyle='#444';cx.font='11px monospace';cx.textAlign='center';
+  for(let xv=-3;xv<=3;xv++) cx.fillText(xv,mapX(xv),PLBOT+14);
+  cx.textAlign='right';
+  const step=rng>4?2:rng>2?1:0.5;
+  for(let fv=-rng;fv<=rng+0.01;fv+=step){
+    const yp=mapY(fv);if(yp<PAD||yp>PLBOT) continue;
+    cx.fillText(fv.toFixed(1),PAD-6,yp+4);
+    cx.strokeStyle='#1a1a35';cx.lineWidth=1;
+    cx.beginPath();cx.moveTo(PAD,yp);cx.lineTo(W-PAD,yp);cx.stroke();
+  }
+  // Axis labels
+  cx.fillStyle='#3a3a60';cx.font='12px sans-serif';cx.textAlign='center';
+  cx.fillText('x',W/2,H-4);
+  cx.save();cx.translate(12,PAD+PLH/2);cx.rotate(-Math.PI/2);
+  cx.fillText('f(x)',0,0);cx.restore();
+
+  // f(x) curve
+  cx.beginPath();cx.strokeStyle='#7ec8ff';cx.lineWidth=2;
+  let first=true;
+  for(let i=0;i<=600;i++){
+    const x=XMIN+i*(XMAX-XMIN)/600,v=fn(x,r);
+    const xp=mapX(x),yp=mapY(v);
+    if(!isFinite(v)||yp<PAD-20||yp>PLBOT+20){first=true;continue;}
+    first?cx.moveTo(xp,yp):cx.lineTo(xp,yp);first=false;
+  }
+  cx.stroke();
+
+  // Fixed points
+  const zeros=findZeros(fn,r);
+  const infoFPs=[];
+  zeros.forEach(z=>{
+    const stab=isStable(fn,r,z);
+    const xp=mapX(z);
+    // Circle on f=0 line
+    cx.beginPath();cx.arc(xp,y0,6,0,2*Math.PI);
+    cx.fillStyle=stab?'#50dd80':'#ff6688';cx.fill();
+    cx.strokeStyle='#0d0d1a';cx.lineWidth=1.5;cx.stroke();
+    // Drop to phase line
+    cx.strokeStyle=stab?'#50dd8033':'#ff668833';cx.lineWidth=1;cx.setLineDash([3,4]);
+    cx.beginPath();cx.moveTo(xp,PLBOT+2);cx.lineTo(xp,PHLINE);cx.stroke();
+    cx.setLineDash([]);
+    // On phase line
+    if(stab){
+      cx.beginPath();cx.arc(xp,PHLINE,8,0,2*Math.PI);
+      cx.fillStyle='#50dd80';cx.fill();
+    } else {
+      cx.beginPath();cx.arc(xp,PHLINE,8,0,2*Math.PI);
+      cx.fillStyle='#0d0d1a';cx.strokeStyle='#ff6688';cx.lineWidth=2;cx.fill();cx.stroke();
+    }
+    infoFPs.push({x:z,stab});
+  });
+
+  // Phase line
+  cx.strokeStyle='#2a2a55';cx.lineWidth=2;
+  cx.beginPath();cx.moveTo(PAD,PHLINE);cx.lineTo(W-PAD,PHLINE);cx.stroke();
+  cx.fillStyle='#334';cx.font='10px sans-serif';cx.textAlign='left';
+  cx.fillText('Phase line  x →',PAD,PHLINE-14);
+
+  // Flow arrows
+  const na=22;
+  for(let i=0;i<=na;i++){
+    const xv=XMIN+i*(XMAX-XMIN)/na;
+    const xp=mapX(xv),fv=fn(xv,r);
+    if(!isFinite(fv)||Math.abs(fv)<0.02) continue;
+    const d=fv>0?1:-1,len=12;
+    cx.fillStyle='#7ec8ff44';
+    cx.beginPath();
+    cx.moveTo(xp+d*len,PHLINE);
+    cx.lineTo(xp+d*len-d*9,PHLINE-5);
+    cx.lineTo(xp+d*len-d*9,PHLINE+5);
+    cx.fill();
+  }
+
+  // Trajectory dot
+  const txC=Math.max(XMIN,Math.min(XMAX,trajX));
+  const txP=mapX(txC);
+  cx.beginPath();cx.arc(txP,PHLINE,9,0,2*Math.PI);
+  cx.fillStyle='#f0c040';cx.shadowColor='#f0c040';cx.shadowBlur=14;cx.fill();cx.shadowBlur=0;
+  // Velocity indicator
+  const vv=fn(txC,r);
+  if(Math.abs(vv)>0.02){
+    const d=vv>0?1:-1,speed=Math.min(Math.abs(vv),3)/3;
+    cx.fillStyle=`rgba(240,192,64,${0.3+speed*0.5})`;
+    cx.beginPath();cx.moveTo(txP+d*18,PHLINE);cx.lineTo(txP+d*8,PHLINE-5);cx.lineTo(txP+d*8,PHLINE+5);cx.fill();
+  }
+
+  // Small marker on f(x) curve
+  const fvT=fn(txC,r);
+  if(isFinite(fvT)){
+    const fyP=mapY(fvT);
+    if(fyP>=PAD-5&&fyP<=PLBOT+5){
+      cx.beginPath();cx.arc(txP,fyP,4,0,2*Math.PI);cx.fillStyle='#f0c040';cx.fill();
+      // Vertical connector
+      cx.strokeStyle='#f0c04030';cx.lineWidth=1;cx.setLineDash([2,3]);
+      cx.beginPath();cx.moveTo(txP,PLBOT);cx.lineTo(txP,PHLINE-10);cx.stroke();
+      cx.setLineDash([]);
+    }
+  }
+
+  // Legend
+  cx.fillStyle='#50dd80';cx.font='11px sans-serif';cx.textAlign='left';
+  cx.fillText('● stable',W-160,PAD+14);
+  cx.fillStyle='#ff6688';cx.fillText('○ unstable',W-100,PAD+14);
+
+  // HUD
+  cx.fillStyle='#444';cx.font='11px monospace';cx.textAlign='left';
+  cx.fillText(`r=${r.toFixed(2)}  t=${simT.toFixed(1)}  x=${trajX.toFixed(3)}  ẋ=${fvT?fvT.toFixed(3):'—'}`,PAD,H-8);
+
+  // Info panel
+  if(infoFPs.length===0){
+    document.getElementById('info').innerHTML='Fixed points: <span style="color:#ff6688">none for current r</span>';
+  } else {
+    const parts=infoFPs.map(fp=>
+      `x* ≈ ${fp.x.toFixed(3)} <span style="color:${fp.stab?'#50dd80':'#ff6688'}">(${fp.stab?'stable':'unstable'})</span>`
+    );
+    document.getElementById('info').innerHTML='Fixed points: '+parts.join('  &nbsp;|&nbsp;  ');
+  }
+}
+
+function integrate(dt){
+  const fn=systems[sysKey].f;
+  const k1=fn(trajX,r),k2=fn(trajX+dt/2*k1,r),k3=fn(trajX+dt/2*k2,r),k4=fn(trajX+dt*k3,r);
+  trajX+=dt*(k1+2*k2+2*k3+k4)/6;
+  simT+=dt;
+  trajX=Math.max(XMIN-0.6,Math.min(XMAX+0.6,trajX));
+}
+
+let lastT=null;
+function frame(t){
+  if(lastT===null) lastT=t;
+  const dt=Math.min((t-lastT)/1000,0.05)*1.8;
+  lastT=t;
+  integrate(dt);
+  draw();
+  requestAnimationFrame(frame);
+}
+
+function sync(){
+  r=+document.getElementById('sr').value;
+  x0=+document.getElementById('sx0').value;
+  sysKey=document.getElementById('sys').value;
+  document.getElementById('rv').textContent=r.toFixed(2);
+  document.getElementById('x0v').textContent=x0.toFixed(2);
+  trajX=x0;simT=0;
+}
+
+document.getElementById('sr').addEventListener('input',sync);
+document.getElementById('sx0').addEventListener('input',sync);
+document.getElementById('sys').addEventListener('change',sync);
+
+sync();requestAnimationFrame(frame);
+</script>

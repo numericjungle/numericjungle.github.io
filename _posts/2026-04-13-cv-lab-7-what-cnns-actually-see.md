@@ -1,5 +1,5 @@
 ---
-date: 2026-04-20 12:00:00.000000
+date: 2026-04-13 09:00:00.000000
 layout: post
 title: "CV Lab 7 - What CNNs Actually See"
 description: "Train a CNN on CIFAR-10 in-browser and visualise what every layer learns — from pixel edges to object parts."

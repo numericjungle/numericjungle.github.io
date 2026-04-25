@@ -1,5 +1,5 @@
 ---
-date: 2026-04-20 09:00:00.000000
+date: 2026-01-05 09:00:00.000000
 layout: post
 title: "CV Lab 1 - Image Filters and Convolution"
 description: "Apply Sobel, Gaussian, Laplacian and seven other classic kernels to a test image — entirely in your browser."

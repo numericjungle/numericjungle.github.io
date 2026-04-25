@@ -22,6 +22,8 @@ exclude:
   - scrapers
   - tmp_rovodev_server_output.log
 
+future: true
+
 markdown: kramdown
 kramdown:
   math_engine: mathjax

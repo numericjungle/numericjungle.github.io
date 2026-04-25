@@ -1,5 +1,5 @@
 ---
-date: 2026-04-20 11:00:00.000000
+date: 2026-03-02 09:00:00.000000
 layout: post
 title: "CV Lab 5 - Data Augmentation"
 description: "See how rotation, scale, shift, noise, and flipping create an effectively infinite training set from a single image."

@@ -1,5 +1,5 @@
 ---
-date: 2026-04-21 10:10:00.000000
+date: 2026-02-24 09:00:00.000000
 layout: post
 title: "Queueing Lab 2 - M/M/c: Scaling with Multiple Servers"
 description: "Add more servers and watch wait times collapse — explore the Erlang C formula and discover when parallelism actually helps."

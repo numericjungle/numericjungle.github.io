@@ -1,0 +1,216 @@
+---
+layout: embed
+title: DS Lab 7b – Hopf Bifurcation
+permalink: /train-deep-learning/ds-hopf/
+---
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:system-ui,sans-serif;background:#0d0d1a;color:#ccc;padding:10px}
+#app{max-width:760px;margin:0 auto}
+.ctrl{display:flex;flex-wrap:wrap;gap:10px;align-items:center;background:#141426;border-radius:8px;padding:10px 14px;margin-bottom:8px}
+.sg{display:flex;flex-direction:column;gap:3px;min-width:130px}
+.sg label{font-size:12px;color:#888}.sg label b{color:#7ec8ff}
+input[type=range]{width:100%;accent-color:#7ec8ff}
+.btn{background:transparent;border:1px solid #7ec8ff66;color:#7ec8ffaa;border-radius:5px;padding:5px 12px;cursor:pointer;font-size:12px}
+.btn:hover{border-color:#7ec8ff;color:#7ec8ff}
+.row{display:flex;gap:6px}
+canvas{display:block;border-radius:8px}
+.info{background:#141426;border-radius:8px;padding:8px 14px;font-size:12px;color:#888;margin-top:6px;line-height:1.7}
+</style>
+<div id="app">
+  <div class="ctrl">
+    <div class="sg">
+      <label>μ (bifurcation param) = <b id="muv">−0.50</b></label>
+      <input type="range" id="smu" min="-2" max="2" step="0.05" value="-0.5">
+    </div>
+    <div class="sg">
+      <label>ω (frequency) = <b id="wv">1.00</b></label>
+      <input type="range" id="sw" min="0.2" max="3" step="0.1" value="1">
+    </div>
+    <div class="sg">
+      <label>IC radius r₀ = <b id="r0v">0.50</b></label>
+      <input type="range" id="sr0" min="0.05" max="2.5" step="0.05" value="0.5">
+    </div>
+    <div class="sg">
+      <label>Trails <b id="trailv">2</b></label>
+      <input type="range" id="strail" min="1" max="5" step="1" value="2">
+    </div>
+    <button class="btn" id="rst">↺ Reset</button>
+  </div>
+  <div class="row">
+    <canvas id="pp" width="440" height="440"></canvas>
+    <canvas id="ts" width="290" height="440"></canvas>
+  </div>
+  <div class="info" id="info">—</div>
+</div>
+<script>
+const pp=document.getElementById('pp'),pc=pp.getContext('2d');
+const ts=document.getElementById('ts'),tc=ts.getContext('2d');
+const PPW=440,PPH=440,TSW=290,TSH=440;
+
+let mu=-0.5,omega=1.0,r0=0.5,nTrails=2;
+let trajs=[],simT=0;
+
+const LMIN=-2.5,LMAX=2.5;
+
+function mpx(v,W,mn,mx){return 30+(v-mn)/(mx-mn)*(W-60);}
+function mpy(v,H,mn,mx){return 30+(1-(v-mn)/(mx-mn))*(H-60);}
+
+function mkPP(v){return mpx(v,PPW,LMIN,LMAX);}
+function mkPY(v){return mpy(v,PPH,LMIN,LMAX);}
+
+function initTrajs(){
+  trajs=[];simT=0;
+  for(let i=0;i<nTrails;i++){
+    const ang=i*2*Math.PI/nTrails;
+    trajs.push({x:r0*Math.cos(ang),y:r0*Math.sin(ang),pts:[],col:`hsl(${i*360/nTrails+200},70%,60%)`});
+  }
+}
+
+// Supercritical Hopf normal form:
+// ẋ = μx − ωy − x(x²+y²)
+// ẏ = ωx + μy − y(x²+y²)
+function f(x,y){
+  const r2=x*x+y*y;
+  return[mu*x-omega*y-x*r2, omega*x+mu*y-y*r2];
+}
+
+function rk4(x,y,dt){
+  const [k1x,k1y]=f(x,y);
+  const [k2x,k2y]=f(x+dt/2*k1x,y+dt/2*k1y);
+  const [k3x,k3y]=f(x+dt/2*k2x,y+dt/2*k2y);
+  const [k4x,k4y]=f(x+dt*k3x,y+dt*k3y);
+  return[x+dt*(k1x+2*k2x+2*k3x+k4x)/6, y+dt*(k1y+2*k2y+2*k3y+k4y)/6];
+}
+
+function drawPhase(){
+  pc.clearRect(0,0,PPW,PPH);pc.fillStyle='#0d0d1a';pc.fillRect(0,0,PPW,PPH);
+  // Grid
+  pc.strokeStyle='#131326';pc.lineWidth=1;
+  for(let v=-2;v<=2;v++){
+    pc.beginPath();pc.moveTo(mkPP(v),30);pc.lineTo(mkPP(v),PPH-30);pc.stroke();
+    pc.beginPath();pc.moveTo(30,mkPY(v));pc.lineTo(PPW-30,mkPY(v));pc.stroke();
+  }
+  // Axes
+  pc.strokeStyle='#252540';pc.lineWidth=1.5;
+  pc.beginPath();pc.moveTo(30,mkPY(0));pc.lineTo(PPW-30,mkPY(0));pc.stroke();
+  pc.beginPath();pc.moveTo(mkPP(0),30);pc.lineTo(mkPP(0),PPH-30);pc.stroke();
+
+  // Limit cycle reference
+  if(mu>0){
+    const lc_r=Math.sqrt(mu);
+    pc.beginPath();pc.arc(mkPP(0),mkPY(0),(lc_r/(LMAX-LMIN))*(PPW-60),0,2*Math.PI);
+    pc.strokeStyle='rgba(240,192,64,0.3)';pc.lineWidth=1.5;pc.setLineDash([5,4]);pc.stroke();pc.setLineDash([]);
+    pc.fillStyle='rgba(240,192,64,0.5)';pc.font='10px monospace';pc.textAlign='left';
+    pc.fillText(`LC r=√μ≈${lc_r.toFixed(2)}`,mkPP(lc_r)+4,mkPY(0)-4);
+  }
+
+  // Trajectories
+  trajs.forEach(traj=>{
+    if(traj.pts.length>1){
+      const N=traj.pts.length;
+      for(let i=1;i<N;i++){
+        const age=i/N;
+        pc.strokeStyle=traj.col.replace('60%',`${20+age*50}%`).replace(')',`,${age*0.8})`).replace('hsl','hsla');
+        pc.lineWidth=1.3;
+        pc.beginPath();pc.moveTo(mkPP(traj.pts[i-1][0]),mkPY(traj.pts[i-1][1]));
+        pc.lineTo(mkPP(traj.pts[i][0]),mkPY(traj.pts[i][1]));pc.stroke();
+      }
+    }
+    // Dot
+    pc.beginPath();pc.arc(mkPP(traj.x),mkPY(traj.y),5,0,2*Math.PI);
+    pc.fillStyle=traj.col;pc.shadowColor=traj.col;pc.shadowBlur=10;pc.fill();pc.shadowBlur=0;
+  });
+
+  // Origin dot
+  pc.beginPath();pc.arc(mkPP(0),mkPY(0),5,0,2*Math.PI);
+  pc.fillStyle=mu<0?'#50dd80':'#ff6688';
+  pc.shadowColor=pc.fillStyle;pc.shadowBlur=8;pc.fill();pc.shadowBlur=0;
+
+  // Labels
+  pc.fillStyle='#3a3a60';pc.font='10px monospace';pc.textAlign='center';
+  [-2,-1,0,1,2].forEach(v=>pc.fillText(v,mkPP(v),PPH-16));
+  pc.textAlign='right';
+  [-2,-1,1,2].forEach(v=>pc.fillText(v,27,mkPY(v)+4));
+  pc.fillStyle='#555';pc.font='11px monospace';pc.textAlign='left';
+  pc.fillText('Phase portrait',32,18);
+  pc.fillStyle='#3a3a60';pc.font='11px sans-serif';pc.textAlign='center';
+  pc.fillText('x',PPW/2,PPH-2);
+  pc.save();pc.translate(10,PPH/2);pc.rotate(-Math.PI/2);pc.fillText('y',0,0);pc.restore();
+}
+
+function drawTS(){
+  tc.clearRect(0,0,TSW,TSH);tc.fillStyle='#0d0d1a';tc.fillRect(0,0,TSW,TSH);
+  const pad=30;const W=TSW-pad-10;const H=(TSH-pad*2-20)/2;
+  const split=pad+H+20;
+
+  ['x','y'].forEach((label,ci)=>{
+    const top=ci===0?pad:split;
+    tc.strokeStyle='#252540';tc.lineWidth=1;
+    tc.beginPath();tc.moveTo(pad,top);tc.lineTo(pad,top+H);tc.stroke();
+    tc.beginPath();tc.moveTo(pad,top+H/2);tc.lineTo(pad+W,top+H/2);tc.stroke();
+    tc.fillStyle='#555';tc.font='10px monospace';tc.textAlign='right';
+    tc.fillText(label+'(t)',pad-3,top+12);
+  });
+
+  trajs.forEach((traj,ti)=>{
+    if(traj.pts.length<2) return;
+    const N=traj.pts.length;
+    [[0,pad],[1,split]].forEach(([idx,top])=>{
+      const vals=traj.pts.map(p=>p[idx]);
+      const mx=Math.max(Math.abs(Math.min(...vals)),Math.abs(Math.max(...vals)),0.5);
+      tc.strokeStyle=traj.col;tc.lineWidth=1.2;tc.beginPath();
+      traj.pts.forEach((p,i)=>{
+        const xp=pad+i/N*W;
+        const yp=top+H/2-p[idx]/mx*H*0.46;
+        i===0?tc.moveTo(xp,yp):tc.lineTo(xp,yp);
+      });
+      tc.stroke();
+    });
+  });
+  tc.fillStyle='#555';tc.font='11px monospace';tc.textAlign='left';
+  tc.fillText('Time series',pad,16);
+  tc.fillStyle='#444';tc.font='10px monospace';
+  tc.fillText(`t=${simT.toFixed(1)}`,pad,TSH-6);
+}
+
+let lastT2=null;
+function frame(t){
+  if(lastT2===null) lastT2=t;
+  const rdt=Math.min((t-lastT2)/1000,0.05);
+  lastT2=t;
+  const dt=0.02;const steps=Math.round(rdt/dt*2);
+  for(let k=0;k<Math.min(steps,40);k++){
+    trajs.forEach(traj=>{
+      [traj.x,traj.y]=rk4(traj.x,traj.y,dt);
+      traj.pts.push([traj.x,traj.y]);
+      if(traj.pts.length>600) traj.pts.shift();
+    });
+    simT+=dt;
+  }
+  drawPhase();drawTS();
+  const lcRadius=mu>0?`<span style="color:#f0c040">Limit cycle radius = √μ ≈ ${Math.sqrt(mu).toFixed(3)}</span>`:
+    `<span style="color:#50dd80">Stable spiral at origin (μ < 0)</span>`;
+  document.getElementById('info').innerHTML=
+    `μ = ${mu.toFixed(2)} &nbsp; ω = ${omega.toFixed(2)} &nbsp;|&nbsp; ${lcRadius}<br>`+
+    `Hopf bifurcation at μ = 0: equilibrium exchanges stability with a limit cycle.`;
+  requestAnimationFrame(frame);
+}
+
+function sync(){
+  mu=+document.getElementById('smu').value;
+  omega=+document.getElementById('sw').value;
+  r0=+document.getElementById('sr0').value;
+  nTrails=+document.getElementById('strail').value;
+  document.getElementById('muv').textContent=mu.toFixed(2);
+  document.getElementById('wv').textContent=omega.toFixed(2);
+  document.getElementById('r0v').textContent=r0.toFixed(2);
+  document.getElementById('trailv').textContent=nTrails;
+  initTrajs();
+}
+
+document.getElementById('rst').addEventListener('click',sync);
+['smu','sw','sr0','strail'].forEach(id=>document.getElementById(id).addEventListener('input',sync));
+
+sync();requestAnimationFrame(frame);
+</script>

@@ -1,5 +1,5 @@
 ---
-date: 2026-04-20 09:30:00.000000
+date: 2026-01-20 09:00:00.000000
 layout: post
 title: "CV Lab 2 - Training a Digit Classifier"
 description: "A two-layer CNN trains on 60 000 real MNIST digits in your browser. Watch loss fall and accuracy climb."

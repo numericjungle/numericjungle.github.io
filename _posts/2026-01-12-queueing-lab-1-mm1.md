@@ -1,5 +1,5 @@
 ---
-date: 2026-04-21 10:00:00.000000
+date: 2026-01-12 09:00:00.000000
 layout: post
 title: "Queueing Lab 1 - M/M/1: The Single-Server Queue"
 description: "Explore the M/M/1 queue interactively — simulate Poisson arrivals and exponential service, then watch theory converge to observation in real time."

@@ -1,0 +1,210 @@
+---
+layout: embed
+title: DS Lab 5 – Lorenz Attractor
+permalink: /train-deep-learning/ds-lorenz/
+---
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:system-ui,sans-serif;background:#0d0d1a;color:#ccc;padding:10px}
+#app{max-width:760px;margin:0 auto}
+.ctrl{display:flex;flex-wrap:wrap;gap:10px;align-items:center;background:#141426;border-radius:8px;padding:10px 14px;margin-bottom:8px}
+.sg{display:flex;flex-direction:column;gap:3px;min-width:120px}
+.sg label{font-size:12px;color:#888}.sg label b{color:#7ec8ff}
+input[type=range]{width:100%;accent-color:#7ec8ff}
+.btn{background:transparent;border:1px solid #7ec8ff66;color:#7ec8ffaa;border-radius:5px;padding:5px 12px;cursor:pointer;font-size:12px}
+.btn:hover{border-color:#7ec8ff;color:#7ec8ff}
+canvas{display:block;width:100%;border-radius:8px;margin:6px 0}
+.info{background:#141426;border-radius:8px;padding:8px 14px;font-size:12px;color:#888;line-height:1.7}
+</style>
+<div id="app">
+  <div class="ctrl">
+    <div class="sg">
+      <label>σ (Prandtl) = <b id="sv">10.0</b></label>
+      <input type="range" id="ss" min="1" max="20" step="0.5" value="10">
+    </div>
+    <div class="sg">
+      <label>ρ (Rayleigh) = <b id="rv">28.0</b></label>
+      <input type="range" id="sr" min="0.5" max="50" step="0.5" value="28">
+    </div>
+    <div class="sg">
+      <label>β = <b id="bv">2.67</b></label>
+      <input type="range" id="sb" min="0.1" max="5" step="0.1" value="2.67">
+    </div>
+    <div class="sg">
+      <label>ΔIC = <b id="dv">0.001</b></label>
+      <input type="range" id="sd" min="-4" max="-1" step="0.1" value="-3">
+    </div>
+    <div class="sg">
+      <label>Speed <b id="spv">3</b>×</label>
+      <input type="range" id="ssp" min="1" max="10" step="1" value="3">
+    </div>
+    <button class="btn" id="rst">↺ Reset</button>
+  </div>
+  <canvas id="cv" width="740" height="480"></canvas>
+  <div class="info" id="info">Two trajectories start at nearly identical initial conditions. Watch them diverge — the hallmark of deterministic chaos.</div>
+</div>
+<script>
+const cv=document.getElementById('cv'),cx=cv.getContext('2d');
+const W=740,H=480;
+let sig=10,rho=28,beta=8/3,deltaIC=0.001,spd=3;
+
+// State: two trajectories
+let t1,t2,hist1,hist2,divHist,simT;
+
+function init(){
+  t1={x:0.1,y:0,z:0};
+  t2={x:0.1+deltaIC,y:0,z:0};
+  hist1=[];hist2=[];divHist=[];simT=0;
+}
+
+function lorenz(s){
+  return{
+    dx:sig*(s.y-s.x),
+    dy:s.x*(rho-s.z)-s.y,
+    dz:s.x*s.y-beta*s.z
+  };
+}
+
+function rk4(s,dt){
+  const f=lorenz;
+  const k1=f(s);
+  const s2={x:s.x+dt/2*k1.dx,y:s.y+dt/2*k1.dy,z:s.z+dt/2*k1.dz};
+  const k2=f(s2);
+  const s3={x:s.x+dt/2*k2.dx,y:s.y+dt/2*k2.dy,z:s.z+dt/2*k2.dz};
+  const k3=f(s3);
+  const s4={x:s.x+dt*k3.dx,y:s.y+dt*k3.dy,z:s.z+dt*k3.dz};
+  const k4=f(s4);
+  return{
+    x:s.x+dt*(k1.dx+2*k2.dx+2*k3.dx+k4.dx)/6,
+    y:s.y+dt*(k1.dy+2*k2.dy+2*k3.dy+k4.dy)/6,
+    z:s.z+dt*(k1.dz+2*k2.dz+2*k3.dz+k4.dz)/6
+  };
+}
+
+// Project (x,z) onto canvas — Lorenz attractor lives in x~[-25,25], z~[0,50]
+const XL=-28,XR=28,ZB=0,ZT=55;
+const PAD={l:50,r:15,t:20,b:90};
+const PW=W-PAD.l-PAD.r,PH=H-PAD.t-PAD.b;
+function mapXZ(x,z){
+  return[PAD.l+(x-XL)/(XR-XL)*PW, PAD.t+(1-(z-ZB)/(ZT-ZB))*PH];
+}
+
+function drawTrail(hist,col,alpha){
+  if(hist.length<2) return;
+  cx.lineWidth=1.2;
+  const N=hist.length;
+  for(let i=1;i<N;i++){
+    const age=i/N;
+    cx.strokeStyle=col.replace(')',`,${age*alpha})`).replace('rgb','rgba');
+    cx.beginPath();
+    const[x0,y0]=mapXZ(hist[i-1][0],hist[i-1][2]);
+    const[x1,y1]=mapXZ(hist[i][0],hist[i][2]);
+    cx.moveTo(x0,y0);cx.lineTo(x1,y1);cx.stroke();
+  }
+}
+
+function draw(){
+  cx.clearRect(0,0,W,H);cx.fillStyle='#0d0d1a';cx.fillRect(0,0,W,H);
+
+  // Grid
+  cx.strokeStyle='#111120';cx.lineWidth=1;
+  for(let xv=-24;xv<=24;xv+=8){
+    const[xp]=mapXZ(xv,ZB);
+    cx.beginPath();cx.moveTo(xp,PAD.t);cx.lineTo(xp,PAD.t+PH);cx.stroke();
+  }
+  for(let zv=0;zv<=50;zv+=10){
+    const[,yp]=mapXZ(0,zv);
+    cx.beginPath();cx.moveTo(PAD.l,yp);cx.lineTo(PAD.l+PW,yp);cx.stroke();
+  }
+  // Axis labels
+  cx.fillStyle='#3a3a60';cx.font='10px monospace';cx.textAlign='center';
+  [-24,-16,-8,0,8,16,24].forEach(v=>{const[xp]=mapXZ(v,ZB);cx.fillText(v,xp,PAD.t+PH+13);});
+  cx.textAlign='right';
+  [0,10,20,30,40,50].forEach(v=>{const[,yp]=mapXZ(0,v);cx.fillText(v,PAD.l-4,yp+4);});
+  cx.fillStyle='#3a3a60';cx.font='12px sans-serif';cx.textAlign='center';
+  cx.fillText('x',PAD.l+PW/2,H-PAD.b+32);
+  cx.save();cx.translate(14,PAD.t+PH/2);cx.rotate(-Math.PI/2);cx.fillText('z',0,0);cx.restore();
+
+  // Trails
+  drawTrail(hist1,'rgb(126,200,255)',0.7);
+  drawTrail(hist2,'rgb(255,100,140)',0.7);
+
+  // Current points
+  [[t1,'#7ec8ff'],[t2,'#ff6688']].forEach(([s,col])=>{
+    const[xp,yp]=mapXZ(s.x,s.z);
+    cx.beginPath();cx.arc(xp,yp,5,0,2*Math.PI);
+    cx.fillStyle=col;cx.shadowColor=col;cx.shadowBlur=10;cx.fill();cx.shadowBlur=0;
+  });
+
+  // Divergence chart at bottom
+  const DT=PAD.t+PH+40, DB=H-10, DL=PAD.l, DR=PAD.l+PW;
+  cx.fillStyle='#090918';cx.fillRect(DL,DT,PW,DB-DT);
+  cx.fillStyle='#2a2a40';cx.font='10px monospace';cx.textAlign='left';
+  cx.fillText('|d(t)| separation (log scale)',DL+4,DT+12);
+  if(divHist.length>2){
+    const logMax=Math.log10(Math.max(...divHist.map(v=>v+1e-12)));
+    const logMin=Math.log10(1e-5);
+    cx.strokeStyle='#f0c040';cx.lineWidth=1.5;cx.beginPath();
+    divHist.forEach((v,i)=>{
+      const xp=DL+i/divHist.length*PW;
+      const lv=Math.log10(Math.max(v,1e-12));
+      const yp=DB-((lv-logMin)/(logMax-logMin))*(DB-DT-18);
+      i===0?cx.moveTo(xp,yp):cx.lineTo(xp,yp);
+    });
+    cx.stroke();
+  }
+  // Title
+  cx.fillStyle='#555';cx.font='11px monospace';cx.textAlign='left';
+  cx.fillText('Lorenz attractor  (x–z projection)',PAD.l,15);
+  // Legend
+  cx.fillStyle='#7ec8ff';cx.font='11px sans-serif';cx.textAlign='right';
+  cx.fillText('trajectory 1',W-PAD.r,15);
+  cx.fillStyle='#ff6688';cx.fillText('trajectory 2',W-PAD.r,28);
+}
+
+let lastT=null;
+function frame(t){
+  if(lastT===null) lastT=t;
+  const rdt=Math.min((t-lastT)/1000,0.05);
+  lastT=t;
+  const dt=0.005;
+  const steps=Math.round(rdt/dt*spd);
+  for(let k=0;k<Math.min(steps,60);k++){
+    t1=rk4(t1,dt);t2=rk4(t2,dt);simT+=dt;
+    hist1.push([t1.x,t1.y,t1.z]);hist2.push([t2.x,t2.y,t2.z]);
+    const d=Math.hypot(t1.x-t2.x,t1.y-t2.y,t1.z-t2.z);
+    divHist.push(d);
+    if(hist1.length>1200){hist1.shift();hist2.shift();}
+    if(divHist.length>600) divHist.shift();
+  }
+  draw();
+  const d=Math.hypot(t1.x-t2.x,t1.y-t2.y,t1.z-t2.z);
+  document.getElementById('info').innerHTML=
+    `t = ${simT.toFixed(1)} &nbsp;|&nbsp; σ=${sig} &nbsp; ρ=${rho} &nbsp; β=${beta.toFixed(2)} &nbsp;|&nbsp; `+
+    `|Δ| = ${d.toExponential(2)}<br>`+
+    (rho>1?`<span style="color:${rho>24.74?'#f0c040':'#50dd80'}">`+(rho>24.74?
+      'Chaotic regime (ρ > 24.74). Trajectories diverge exponentially.':
+      'Stable fixed points C±. No chaos yet — try ρ > 24.74')+
+    '</span>':'<span style="color:#7ec8ff">ρ < 1: only fixed point is origin.</span>');
+  requestAnimationFrame(frame);
+}
+
+function sync(){
+  sig=+document.getElementById('ss').value;
+  rho=+document.getElementById('sr').value;
+  beta=+document.getElementById('sb').value;
+  const dexp=+document.getElementById('sd').value;
+  deltaIC=Math.pow(10,dexp);
+  spd=+document.getElementById('ssp').value;
+  document.getElementById('sv').textContent=sig.toFixed(1);
+  document.getElementById('rv').textContent=rho.toFixed(1);
+  document.getElementById('bv').textContent=beta.toFixed(2);
+  document.getElementById('dv').textContent=deltaIC.toExponential(0);
+  document.getElementById('spv').textContent=spd;
+}
+
+document.getElementById('rst').addEventListener('click',()=>{sync();init();});
+['ss','sr','sb','sd','ssp'].forEach(id=>document.getElementById(id).addEventListener('input',sync));
+
+sync();init();requestAnimationFrame(frame);
+</script>
