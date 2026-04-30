@@ -6,8 +6,15 @@
     <description>Research posts from Anthropic</description>
     <language>en-US</language>
     <generator>numericjungle scrape_rss.py</generator>
-    <lastBuildDate>Wed, 29 Apr 2026 19:44:47 +0000</lastBuildDate>
+    <lastBuildDate>Thu, 30 Apr 2026 03:36:47 +0000</lastBuildDate>
     <atom:link href="https://numericjungle.github.io/feeds/anthropic-research.xml" rel="self" type="application/rss+xml"/>
+    <item>
+      <title>Economic Index Survey Announcement</title>
+      <link>https://www.anthropic.com/research/economic-index-survey-announcement</link>
+      <guid isPermaLink="true">https://www.anthropic.com/research/economic-index-survey-announcement</guid>
+      <pubDate>Wed, 22 Apr 2026 14:27:03 +0000</pubDate>
+      <description>Economic Research Announcing the Anthropic Economic Index Survey Apr 22, 2026 The Economic Research team is launching the Anthropic Economic Index Survey, a monthly survey conducted through Anthropic Interviewer . Understanding AI's economic impact requires moving beyond the quantitative data we have today. Usage and diffusion metrics tell us how AI is being deployed, and traditional labor market indicators—like employment rates, wage trends, and layoffs—track what has already happened, often...</description>
+    </item>
     <item>
       <title>81K Economics</title>
       <link>https://www.anthropic.com/research/81k-economics</link>
@@ -216,7 +223,6 @@
       <link>https://www.anthropic.com/research/prompt-injection-defenses</link>
       <guid isPermaLink="true">https://www.anthropic.com/research/prompt-injection-defenses</guid>
       <pubDate>Mon, 24 Nov 2025 15:10:00 +0000</pubDate>
-      <description>Product Mitigating the risk of prompt injections in browser use Nov 24, 2025 Claude Opus 4.5 sets a new standard in robustness to prompt injections —adversarial instructions hidden within the content that AI models process. Our new model is a major improvement over previous ones in both its core performance and in the safeguards surrounding its use. But prompt injection is far from a solved problem, particularly as models take more real-world actions. We expect to continue our progress—aiming...</description>
     </item>
     <item>
       <title>Emergent Misalignment Reward Hacking</title>
