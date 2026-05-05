@@ -6,7 +6,7 @@
     <description>Research posts from Anthropic</description>
     <language>en-US</language>
     <generator>numericjungle scrape_rss.py</generator>
-    <lastBuildDate>Mon, 04 May 2026 19:46:26 +0000</lastBuildDate>
+    <lastBuildDate>Tue, 05 May 2026 03:24:42 +0000</lastBuildDate>
     <atom:link href="https://numericjungle.github.io/feeds/anthropic-research.xml" rel="self" type="application/rss+xml"/>
     <item>
       <title>Evaluating Claude For Bioinformatics With Biomysterybench</title>
