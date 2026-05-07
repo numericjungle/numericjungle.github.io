@@ -6,8 +6,15 @@
     <description>Research posts from Anthropic</description>
     <language>en-US</language>
     <generator>numericjungle scrape_rss.py</generator>
-    <lastBuildDate>Thu, 07 May 2026 08:41:38 +0000</lastBuildDate>
+    <lastBuildDate>Thu, 07 May 2026 14:26:00 +0000</lastBuildDate>
     <atom:link href="https://numericjungle.github.io/feeds/anthropic-research.xml" rel="self" type="application/rss+xml"/>
+    <item>
+      <title>Claude Personal Guidance</title>
+      <link>https://www.anthropic.com/research/claude-personal-guidance</link>
+      <guid isPermaLink="true">https://www.anthropic.com/research/claude-personal-guidance</guid>
+      <pubDate>Thu, 30 Apr 2026 16:35:00 +0000</pubDate>
+      <description>Societal Impacts How people ask Claude for personal guidance Apr 30, 2026 People don’t just come to Claude for code reviews or meeting summaries. They ask whether to take the job, how to talk to their crush, if they should move halfway across the world. Using our privacy-preserving analysis tool on a random sample of 1 million claude.ai conversations, we found that roughly 6% were people coming to Claude for personal guidance—seeking not just information but perspective on what to do next. In...</description>
+    </item>
     <item>
       <title>Evaluating Claude For Bioinformatics With Biomysterybench</title>
       <link>https://www.anthropic.com/research/Evaluating-Claude-For-Bioinformatics-With-BioMysteryBench</link>
@@ -216,7 +223,6 @@
       <link>https://www.anthropic.com/research/how-ai-is-transforming-work-at-anthropic</link>
       <guid isPermaLink="true">https://www.anthropic.com/research/how-ai-is-transforming-work-at-anthropic</guid>
       <pubDate>Tue, 02 Dec 2025 18:58:43 +0000</pubDate>
-      <description>Societal Impacts How AI is transforming work at Anthropic Dec 2, 2025 How is AI changing the way we work? Our previous research on AI’s economic impacts looked at the labor market as a whole, covering a variety of different jobs. But what if we studied some of the earliest adopters of AI technology in more detail—namely, us? Turning the lens inward, in August 2025 we surveyed 132 Anthropic engineers and researchers, conducted 53 in-depth qualitative interviews, and studied internal Claude Code...</description>
     </item>
     <item>
       <title>Estimating Productivity Gains</title>
