@@ -6,8 +6,22 @@
     <description>Research posts from Anthropic</description>
     <language>en-US</language>
     <generator>numericjungle scrape_rss.py</generator>
-    <lastBuildDate>Thu, 07 May 2026 14:26:00 +0000</lastBuildDate>
+    <lastBuildDate>Thu, 07 May 2026 19:48:11 +0000</lastBuildDate>
     <atom:link href="https://numericjungle.github.io/feeds/anthropic-research.xml" rel="self" type="application/rss+xml"/>
+    <item>
+      <title>Natural Language Autoencoders: Turning Claude’s thoughts into text</title>
+      <link>https://www.anthropic.com/research/natural-language-autoencoders</link>
+      <guid isPermaLink="true">https://www.anthropic.com/research/natural-language-autoencoders</guid>
+      <pubDate>Thu, 07 May 2026 21:21:00 +0000</pubDate>
+      <description>Interpretability Natural Language Autoencoders: Turning Claude’s thoughts into text May 7, 2026 Read the paper When you talk to an AI model like Claude, you talk to it in words. Internally, Claude processes those words as long lists of numbers, before again producing words as its output. These numbers in the middle are called activations— and like neural activity in the human brain, they encode Claude’s thoughts. Also like neural activity, activations are difficult to understand. We can’t...</description>
+    </item>
+    <item>
+      <title>Anthropic Institute Agenda</title>
+      <link>https://www.anthropic.com/research/anthropic-institute-agenda</link>
+      <guid isPermaLink="true">https://www.anthropic.com/research/anthropic-institute-agenda</guid>
+      <pubDate>Thu, 07 May 2026 10:02:22 +0000</pubDate>
+      <description>Policy Focus areas for The Anthropic Institute May 7, 2026 At The Anthropic Institute (TAI), we’ll be using the information we can access from within a frontier lab to investigate AI’s impact on the world, and sharing our learnings with the public. Here, we’re sharing the questions that drive our research agenda. Our agenda focuses on four areas for research: In Core Views on AI Safety , we wrote that doing effective safety research required close contact with frontier AI systems. The same...</description>
+    </item>
     <item>
       <title>Claude Personal Guidance</title>
       <link>https://www.anthropic.com/research/claude-personal-guidance</link>
@@ -209,14 +223,12 @@
       <link>https://www.anthropic.com/research/project-vend-2</link>
       <guid isPermaLink="true">https://www.anthropic.com/research/project-vend-2</guid>
       <pubDate>Thu, 18 Dec 2025 10:33:00 +0000</pubDate>
-      <description>Policy Frontier Red Team Project Vend: Phase two Dec 18, 2025 In June, we revealed that we’d set up a small shop in our San Francisco office lunchroom, run by an AI shopkeeper. It was part of Project Vend , a free-form experiment exploring how well AIs could do on complex, real-world tasks. Alas, the shopkeeper—a modified version of Claude we named “Claudius”—did not do particularly well. It lost money over time, had a strange identity crisis where it claimed it was a human wearing a blue...</description>
     </item>
     <item>
       <title>Anthropic Interviewer</title>
       <link>https://www.anthropic.com/research/anthropic-interviewer</link>
       <guid isPermaLink="true">https://www.anthropic.com/research/anthropic-interviewer</guid>
       <pubDate>Thu, 04 Dec 2025 17:00:00 +0000</pubDate>
-      <description>Societal Impacts Introducing Anthropic Interviewer: What 1,250 professionals told us about working with AI Dec 4, 2025 We’re launching a new tool, Anthropic Interviewer, to help understand people’s perspectives on AI. In this research post, we introduce the tool, describe a test of it on a sample of professionals, and discuss our early findings. We also discuss future work in this direction that we can now explore with the development of this tool and through partnerships with creatives...</description>
     </item>
     <item>
       <title>How Ai Is Transforming Work At Anthropic</title>
@@ -423,7 +435,7 @@
       <pubDate>Mon, 10 Feb 2025 13:00:00 +0000</pubDate>
     </item>
     <item>
-      <title>Constitutional Classifiers: Defending against universal jailbreaks</title>
+      <title>Constitutional Classifiers</title>
       <link>https://www.anthropic.com/research/constitutional-classifiers</link>
       <guid isPermaLink="true">https://www.anthropic.com/research/constitutional-classifiers</guid>
       <pubDate>Mon, 03 Feb 2025 12:35:00 +0000</pubDate>
