@@ -6,7 +6,7 @@
     <description>Research posts from Anthropic</description>
     <language>en-US</language>
     <generator>numericjungle scrape_rss.py</generator>
-    <lastBuildDate>Thu, 07 May 2026 19:48:11 +0000</lastBuildDate>
+    <lastBuildDate>Fri, 08 May 2026 03:31:17 +0000</lastBuildDate>
     <atom:link href="https://numericjungle.github.io/feeds/anthropic-research.xml" rel="self" type="application/rss+xml"/>
     <item>
       <title>Natural Language Autoencoders: Turning Claude’s thoughts into text</title>
@@ -14,6 +14,13 @@
       <guid isPermaLink="true">https://www.anthropic.com/research/natural-language-autoencoders</guid>
       <pubDate>Thu, 07 May 2026 21:21:00 +0000</pubDate>
       <description>Interpretability Natural Language Autoencoders: Turning Claude’s thoughts into text May 7, 2026 Read the paper When you talk to an AI model like Claude, you talk to it in words. Internally, Claude processes those words as long lists of numbers, before again producing words as its output. These numbers in the middle are called activations— and like neural activity in the human brain, they encode Claude’s thoughts. Also like neural activity, activations are difficult to understand. We can’t...</description>
+    </item>
+    <item>
+      <title>Donating Open Source Petri</title>
+      <link>https://www.anthropic.com/research/donating-open-source-petri</link>
+      <guid isPermaLink="true">https://www.anthropic.com/research/donating-open-source-petri</guid>
+      <pubDate>Thu, 07 May 2026 20:17:00 +0000</pubDate>
+      <description>Alignment Donating our open-source alignment tool May 7, 2026 In October 2025, we launched Petri , an open-source toolbox of alignment tests that can be applied to any large language model. Petri, which was developed as part of our Anthropic Fellows program, can be used to rapidly and easily test AI models for concerning tendencies like deception, sycophancy, and cooperation with harmful requests. It’s part of our efforts to develop alignment tools that are open and useful for the whole AI...</description>
     </item>
     <item>
       <title>Anthropic Institute Agenda</title>
@@ -216,7 +223,6 @@
       <link>https://www.anthropic.com/research/bloom</link>
       <guid isPermaLink="true">https://www.anthropic.com/research/bloom</guid>
       <pubDate>Fri, 19 Dec 2025 19:45:00 +0000</pubDate>
-      <description>Alignment Introducing Bloom: an open source tool for automated behavioral evaluations Dec 19, 2025 Read the technical report We're releasing Bloom, an open source agentic framework for generating behavioral evaluations of frontier AI models. Bloom takes a researcher-specified behavior and quantifies its frequency and severity across automatically generated scenarios. Bloom's evaluations correlate strongly with our hand-labeled judgments and we find they reliably separate baseline models from...</description>
     </item>
     <item>
       <title>Project Vend: Phase two</title>
