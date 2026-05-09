@@ -6,8 +6,15 @@
     <description>Research posts from Anthropic</description>
     <language>en-US</language>
     <generator>numericjungle scrape_rss.py</generator>
-    <lastBuildDate>Fri, 08 May 2026 19:25:36 +0000</lastBuildDate>
+    <lastBuildDate>Sat, 09 May 2026 03:30:56 +0000</lastBuildDate>
     <atom:link href="https://numericjungle.github.io/feeds/anthropic-research.xml" rel="self" type="application/rss+xml"/>
+    <item>
+      <title>Teaching Claude why</title>
+      <link>https://www.anthropic.com/research/teaching-claude-why</link>
+      <guid isPermaLink="true">https://www.anthropic.com/research/teaching-claude-why</guid>
+      <pubDate>Fri, 08 May 2026 12:18:00 +0000</pubDate>
+      <description>Alignment Teaching Claude why May 8, 2026 Last year, we released a case study on agentic misalignment . In experimental scenarios, we showed that AI models from many different developers sometimes took egregiously misaligned actions when they encountered (fictional) ethical dilemmas. For example, in one heavily discussed example, the models blackmailed engineers to avoid being shut down. When we first published this research, our most capable frontier models were from the Claude 4 family. This...</description>
+    </item>
     <item>
       <title>Natural Language Autoencoders: Turning Claude’s thoughts into text</title>
       <link>https://www.anthropic.com/research/natural-language-autoencoders</link>
@@ -72,7 +79,7 @@
       <description>Policy Trustworthy agents in practice Apr 9, 2026 AI “agents” represent the latest major shift in how people and organizations are using AI. A couple of years ago, AI models were only broadly available as chatbots—simple question-and-answer machines. Now, through products like Claude Code and Claude Cowork , AI models can do much more: they can write and execute code, manage files, and complete tasks that span multiple applications. This represents a new frontier for governance. Agents are...</description>
     </item>
     <item>
-      <title>Emotion concepts and their function in a large language model</title>
+      <title>Emotion Concepts Function</title>
       <link>https://www.anthropic.com/research/emotion-concepts-function</link>
       <guid isPermaLink="true">https://www.anthropic.com/research/emotion-concepts-function</guid>
       <pubDate>Thu, 02 Apr 2026 10:56:00 +0000</pubDate>
@@ -216,7 +223,6 @@
       <link>https://www.anthropic.com/research/next-generation-constitutional-classifiers</link>
       <guid isPermaLink="true">https://www.anthropic.com/research/next-generation-constitutional-classifiers</guid>
       <pubDate>Fri, 09 Jan 2026 17:17:00 +0000</pubDate>
-      <description>Alignment Next-generation Constitutional Classifiers: More efficient protection against universal jailbreaks Jan 9, 2026 Read the paper Large language models remain vulnerable to jailbreaks—techniques that can circumvent safety guardrails and elicit harmful information. Over time, we’ve implemented a variety of protections that have made our models much less likely to assist with dangerous user queries—in particular relating to the production of chemical, biological, radiological, or nuclear...</description>
     </item>
     <item>
       <title>Bloom</title>
