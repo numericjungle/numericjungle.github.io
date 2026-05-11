@@ -6,7 +6,7 @@
     <description>Engineering posts from Anthropic</description>
     <language>en-US</language>
     <generator>numericjungle scrape_rss.py</generator>
-    <lastBuildDate>Mon, 11 May 2026 15:23:22 +0000</lastBuildDate>
+    <lastBuildDate>Mon, 11 May 2026 19:57:41 +0000</lastBuildDate>
     <atom:link href="https://numericjungle.github.io/feeds/anthropic-engineering.xml" rel="self" type="application/rss+xml"/>
     <item>
       <title>An update on recent Claude Code quality reports</title>
