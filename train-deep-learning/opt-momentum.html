@@ -1,0 +1,359 @@
+---
+layout: embed
+title: Optimization Lab 3 - Momentum and Nesterov
+permalink: /train-deep-learning/opt-momentum/
+---
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:system-ui,sans-serif;background:#0d0d1a;color:#cbd5e1;padding:10px}
+#app{max-width:800px;margin:0 auto}
+.ctrl{display:flex;flex-wrap:wrap;gap:12px;align-items:center;background:#141426;border-radius:8px;padding:10px 14px;margin-bottom:8px}
+.sg{display:flex;flex-direction:column;gap:3px;min-width:145px}
+.sg label{font-size:12px;color:#94a3b8}
+.sg label b{color:#7dd3fc}
+input[type=range]{width:100%;accent-color:#7dd3fc}
+.badge{background:#101830;border:1px solid #f0c040;color:#f0c040;border-radius:5px;padding:4px 12px;font-size:13px}
+.btn{background:transparent;border:1px solid #7dd3fc66;color:#bae6fd;border-radius:5px;padding:5px 14px;cursor:pointer;font-size:12px}
+.btn:hover{border-color:#7dd3fc;color:#e0f2fe}
+.layout{display:grid;grid-template-columns:1.45fr 1fr;gap:8px}
+@media(max-width:700px){.layout{grid-template-columns:1fr}}
+canvas{display:block;width:100%;border-radius:8px;background:#080816}
+.legend{display:flex;gap:12px;flex-wrap:wrap;font-size:11px;color:#94a3b8;margin:6px 0 2px}
+.li{display:flex;align-items:center;gap:6px}
+.dot{width:10px;height:10px;border-radius:50%}
+.info{background:#141426;border-radius:8px;padding:10px 14px;margin-top:8px;font-size:12px;line-height:1.7;color:#94a3b8}
+.warn{background:#321010;border:1px solid #ff7b72;color:#fda4af;border-radius:6px;padding:7px 12px;font-size:12px;margin-bottom:8px;display:none}
+.warn.on{display:block}
+</style>
+
+<div id="app">
+  <div class="ctrl">
+    <div class="sg">
+      <label>Learning rate <b id="lrv">0.12</b></label>
+      <input type="range" id="lr" min="0.01" max="0.35" step="0.01" value="0.12">
+    </div>
+    <div class="sg">
+      <label>Momentum beta <b id="bv">0.85</b></label>
+      <input type="range" id="beta" min="0.10" max="0.98" step="0.01" value="0.85">
+    </div>
+    <div class="sg">
+      <label>Condition number <b id="kv">18</b></label>
+      <input type="range" id="kappa" min="2" max="40" step="1" value="18">
+    </div>
+    <div class="badge" id="status">step 0</div>
+    <button class="btn" id="play">Play</button>
+    <button class="btn" id="reset">Reset</button>
+  </div>
+
+  <div class="warn" id="warn">The learning rate is too high for this ravine. Plain gradient descent becomes unstable before momentum has a chance to help.</div>
+
+  <div class="legend">
+    <div class="li"><span class="dot" style="background:#7dd3fc"></span>Gradient descent</div>
+    <div class="li"><span class="dot" style="background:#f0c040"></span>Momentum</div>
+    <div class="li"><span class="dot" style="background:#34d399"></span>Nesterov</div>
+  </div>
+
+  <div class="layout">
+    <canvas id="traj" width="480" height="380"></canvas>
+    <canvas id="loss" width="320" height="380"></canvas>
+  </div>
+
+  <div class="info" id="info"></div>
+</div>
+
+<script>
+(function(){
+  const traj = document.getElementById('traj');
+  const tctx = traj.getContext('2d');
+  const lossCv = document.getElementById('loss');
+  const lctx = lossCv.getContext('2d');
+  const bg = document.createElement('canvas');
+  bg.width = traj.width;
+  bg.height = traj.height;
+  const bgx = bg.getContext('2d');
+
+  const colors = ['#7dd3fc', '#f0c040', '#34d399'];
+  const labels = ['GD', 'Momentum', 'Nesterov'];
+
+  let lr = 0.12;
+  let beta = 0.85;
+  let kappa = 18;
+  let running = false;
+  let step = 0;
+  let lastFrame = null;
+  let states = [];
+  let A = [[1,0],[0,1]];
+  const start = [-3.6, 2.2];
+  const bounds = {xmin:-4.5,xmax:4.5,ymin:-3.5,ymax:3.5};
+
+  function matVec(m, v){
+    return [
+      m[0][0] * v[0] + m[0][1] * v[1],
+      m[1][0] * v[0] + m[1][1] * v[1]
+    ];
+  }
+
+  function quadratic(theta){
+    const Av = matVec(A, theta);
+    return 0.5 * (theta[0] * Av[0] + theta[1] * Av[1]);
+  }
+
+  function grad(theta){
+    return matVec(A, theta);
+  }
+
+  function rebuildMatrix(){
+    const angle = Math.PI / 6;
+    const c = Math.cos(angle);
+    const s = Math.sin(angle);
+    const d1 = 1;
+    const d2 = kappa;
+    A = [
+      [c*c*d1 + s*s*d2, c*s*(d1 - d2)],
+      [c*s*(d1 - d2), s*s*d1 + c*c*d2]
+    ];
+    rebuildBackground();
+  }
+
+  function rebuildBackground(){
+    bgx.fillStyle = '#080816';
+    bgx.fillRect(0, 0, bg.width, bg.height);
+    const levels = [0.5, 1, 2, 4, 8, 16, 32, 64, 128];
+    const cellsX = 88;
+    const cellsY = 74;
+    const dx = (bounds.xmax - bounds.xmin) / cellsX;
+    const dy = (bounds.ymax - bounds.ymin) / cellsY;
+    for(let i = 0; i < cellsX; i++){
+      for(let j = 0; j < cellsY; j++){
+        const x = bounds.xmin + (i + 0.5) * dx;
+        const y = bounds.ymin + (j + 0.5) * dy;
+        const v = quadratic([x, y]);
+        let band = 0;
+        while(band < levels.length && v > levels[band]) band++;
+        const t = band / levels.length;
+        const r = Math.floor(12 + 44 * t);
+        const g = Math.floor(18 + 26 * t);
+        const b = Math.floor(30 + 85 * (1 - t));
+        bgx.fillStyle = 'rgb(' + r + ',' + g + ',' + b + ')';
+        const x0 = mapX(x);
+        const x1 = mapX(x + dx);
+        const y0 = mapY(y);
+        const y1 = mapY(y + dy);
+        bgx.fillRect(x0, y1, x1 - x0 + 1, y0 - y1 + 1);
+      }
+    }
+    bgx.strokeStyle = '#26304d';
+    bgx.lineWidth = 1;
+    for(let i = -4; i <= 4; i++){
+      const x = mapX(i);
+      bgx.beginPath();
+      bgx.moveTo(x, 0);
+      bgx.lineTo(x, bg.height);
+      bgx.stroke();
+    }
+    for(let i = -3; i <= 3; i++){
+      const y = mapY(i);
+      bgx.beginPath();
+      bgx.moveTo(0, y);
+      bgx.lineTo(bg.width, y);
+      bgx.stroke();
+    }
+    bgx.strokeStyle = '#3b4568';
+    bgx.beginPath();
+    bgx.moveTo(0, mapY(0));
+    bgx.lineTo(bg.width, mapY(0));
+    bgx.stroke();
+    bgx.beginPath();
+    bgx.moveTo(mapX(0), 0);
+    bgx.lineTo(mapX(0), bg.height);
+    bgx.stroke();
+  }
+
+  function mapX(x){
+    return (x - bounds.xmin) / (bounds.xmax - bounds.xmin) * traj.width;
+  }
+
+  function mapY(y){
+    return traj.height - (y - bounds.ymin) / (bounds.ymax - bounds.ymin) * traj.height;
+  }
+
+  function reset(){
+    running = false;
+    lastFrame = null;
+    step = 0;
+    states = labels.map(function(){
+      return {theta:start.slice(), v:[0,0], traj:[start.slice()], losses:[quadratic(start)]};
+    });
+    document.getElementById('play').textContent = 'Play';
+    draw();
+  }
+
+  function advanceOne(){
+    const gd = states[0];
+    const gg = grad(gd.theta);
+    gd.theta[0] -= lr * gg[0];
+    gd.theta[1] -= lr * gg[1];
+
+    const mom = states[1];
+    const gm = grad(mom.theta);
+    mom.v[0] = beta * mom.v[0] - lr * gm[0];
+    mom.v[1] = beta * mom.v[1] - lr * gm[1];
+    mom.theta[0] += mom.v[0];
+    mom.theta[1] += mom.v[1];
+
+    const nag = states[2];
+    const look = [nag.theta[0] + beta * nag.v[0], nag.theta[1] + beta * nag.v[1]];
+    const gn = grad(look);
+    nag.v[0] = beta * nag.v[0] - lr * gn[0];
+    nag.v[1] = beta * nag.v[1] - lr * gn[1];
+    nag.theta[0] += nag.v[0];
+    nag.theta[1] += nag.v[1];
+
+    for(const state of states){
+      state.traj.push(state.theta.slice());
+      state.losses.push(quadratic(state.theta));
+      if(state.traj.length > 260) state.traj.shift();
+      if(state.losses.length > 260) state.losses.shift();
+    }
+    step++;
+  }
+
+  function drawTraj(){
+    tctx.drawImage(bg, 0, 0);
+    tctx.fillStyle = '#9aa5c1';
+    tctx.font = '11px monospace';
+    tctx.fillText('ravine geometry', 8, 16);
+    for(let i = 0; i < states.length; i++){
+      const state = states[i];
+      tctx.strokeStyle = colors[i];
+      tctx.lineWidth = 1.8;
+      tctx.beginPath();
+      state.traj.forEach(function(p, idx){
+        const x = mapX(p[0]);
+        const y = mapY(p[1]);
+        if(idx === 0) tctx.moveTo(x, y);
+        else tctx.lineTo(x, y);
+      });
+      tctx.stroke();
+      const cur = state.traj[state.traj.length - 1];
+      const x = mapX(cur[0]);
+      const y = mapY(cur[1]);
+      tctx.shadowColor = colors[i];
+      tctx.shadowBlur = 12;
+      tctx.fillStyle = colors[i];
+      tctx.beginPath();
+      tctx.arc(x, y, 5.5, 0, Math.PI * 2);
+      tctx.fill();
+      tctx.shadowBlur = 0;
+    }
+  }
+
+  function drawLoss(){
+    const W = lossCv.width;
+    const H = lossCv.height;
+    const pad = {l:42, r:10, t:18, b:24};
+    lctx.fillStyle = '#080816';
+    lctx.fillRect(0, 0, W, H);
+    lctx.fillStyle = '#9aa5c1';
+    lctx.font = '11px monospace';
+    lctx.fillText('loss (log scale)', 8, 14);
+
+    const all = states.flatMap(function(s){ return s.losses; });
+    const lo = Math.log(Math.max(1e-8, Math.min.apply(null, all)));
+    const hi = Math.log(Math.max.apply(null, all) + 1e-8);
+    const span = Math.max(0.8, hi - lo);
+
+    lctx.strokeStyle = '#253250';
+    lctx.lineWidth = 1;
+    for(let i = 0; i < 5; i++){
+      const y = pad.t + (H - pad.t - pad.b) * i / 4;
+      lctx.beginPath();
+      lctx.moveTo(pad.l, y);
+      lctx.lineTo(W - pad.r, y);
+      lctx.stroke();
+    }
+    lctx.beginPath();
+    lctx.moveTo(pad.l, pad.t);
+    lctx.lineTo(pad.l, H - pad.b);
+    lctx.lineTo(W - pad.r, H - pad.b);
+    lctx.stroke();
+
+    function px(i, n){
+      return pad.l + (W - pad.l - pad.r) * i / Math.max(1, n - 1);
+    }
+    function py(v){
+      return pad.t + (H - pad.t - pad.b) * (hi - Math.log(v + 1e-8)) / span;
+    }
+
+    for(let i = 0; i < states.length; i++){
+      lctx.strokeStyle = colors[i];
+      lctx.lineWidth = 1.8;
+      lctx.beginPath();
+      states[i].losses.forEach(function(v, idx){
+        if(idx === 0) lctx.moveTo(px(idx, states[i].losses.length), py(v));
+        else lctx.lineTo(px(idx, states[i].losses.length), py(v));
+      });
+      lctx.stroke();
+    }
+    lctx.fillStyle = '#64748b';
+    lctx.fillText('step ' + step, W - 68, H - 6);
+  }
+
+  function draw(){
+    drawTraj();
+    drawLoss();
+    document.getElementById('status').textContent = 'step ' + step;
+    const stableEdge = 2 / kappa;
+    document.getElementById('warn').className = lr > stableEdge ? 'warn on' : 'warn';
+    const info = labels.map(function(label, i){
+      return '<span style="color:' + colors[i] + '"><b>' + label + '</b></span>: ' +
+        states[i].losses[states[i].losses.length - 1].toExponential(2);
+    }).join('<br>');
+    document.getElementById('info').innerHTML =
+      '<b>Largest curvature</b>: ' + kappa.toFixed(0) +
+      ' &nbsp;|&nbsp; <b>critical GD step</b>: ' + (2 / kappa).toFixed(3) +
+      ' &nbsp;|&nbsp; <b>momentum beta</b>: ' + beta.toFixed(2) +
+      '<br>' + info +
+      '<br>Momentum stores a velocity vector, so it damps the left-right zig-zag across the ravine. Nesterov looks one step ahead before measuring the gradient, which usually turns earlier near the valley floor.';
+  }
+
+  function loop(ts){
+    if(!running) return;
+    if(lastFrame == null) lastFrame = ts;
+    const want = Math.floor((ts - lastFrame) / 1000 * 18);
+    if(want > 0){
+      const n = Math.min(want, 10);
+      for(let i = 0; i < n; i++) advanceOne();
+      lastFrame = ts;
+      draw();
+    }
+    requestAnimationFrame(loop);
+  }
+
+  function sync(){
+    lr = +document.getElementById('lr').value;
+    beta = +document.getElementById('beta').value;
+    kappa = +document.getElementById('kappa').value;
+    document.getElementById('lrv').textContent = lr.toFixed(2);
+    document.getElementById('bv').textContent = beta.toFixed(2);
+    document.getElementById('kv').textContent = kappa.toFixed(0);
+    rebuildMatrix();
+    reset();
+  }
+
+  document.getElementById('lr').addEventListener('input', sync);
+  document.getElementById('beta').addEventListener('input', sync);
+  document.getElementById('kappa').addEventListener('input', sync);
+  document.getElementById('play').addEventListener('click', function(){
+    running = !running;
+    document.getElementById('play').textContent = running ? 'Pause' : 'Play';
+    if(running){
+      lastFrame = null;
+      requestAnimationFrame(loop);
+    }
+  });
+  document.getElementById('reset').addEventListener('click', reset);
+
+  sync();
+})();
+</script>

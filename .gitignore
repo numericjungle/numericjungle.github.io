@@ -14,5 +14,14 @@ vendor
 music_posts
 node_modules
 
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Temp / local
+tmp_rovodev_server_output.log
+feeds/archive/
+
 _posts/argparse
 _posts/datetime

@@ -1,0 +1,484 @@
+---
+layout: embed
+title: Optimization Lab 2 - SGD and Mini-batches
+permalink: /train-deep-learning/opt-sgd-batches/
+---
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:system-ui,sans-serif;background:#0d0d1a;color:#cbd5e1;padding:10px}
+#app{max-width:800px;margin:0 auto}
+.ctrl{display:flex;flex-wrap:wrap;gap:12px;align-items:center;background:#141426;border-radius:8px;padding:10px 14px;margin-bottom:8px}
+.sg{display:flex;flex-direction:column;gap:3px;min-width:150px}
+.sg label{font-size:12px;color:#94a3b8}
+.sg label b{color:#7dd3fc}
+input[type=range]{width:100%;accent-color:#7dd3fc}
+.badge{background:#101830;border:1px solid #f0c040;color:#f0c040;border-radius:5px;padding:4px 12px;font-size:13px}
+.btn{background:transparent;border:1px solid #7dd3fc66;color:#bae6fd;border-radius:5px;padding:5px 14px;cursor:pointer;font-size:12px}
+.btn:hover{border-color:#7dd3fc;color:#e0f2fe}
+.layout{display:grid;grid-template-columns:1.45fr 1fr;gap:8px}
+@media(max-width:700px){.layout{grid-template-columns:1fr}}
+canvas{display:block;width:100%;border-radius:8px;background:#080816}
+.legend{display:flex;gap:12px;flex-wrap:wrap;font-size:11px;color:#94a3b8;margin:6px 0 2px}
+.li{display:flex;align-items:center;gap:6px}
+.dot{width:10px;height:10px;border-radius:50%}
+.info{background:#141426;border-radius:8px;padding:10px 14px;margin-top:8px;font-size:12px;line-height:1.7;color:#94a3b8}
+.info b{color:#e2e8f0}
+</style>
+
+<div id="app">
+  <div class="ctrl">
+    <div class="sg">
+      <label>Learning rate <b id="lrv">0.10</b></label>
+      <input type="range" id="lr" min="0.01" max="0.40" step="0.01" value="0.10">
+    </div>
+    <div class="sg">
+      <label>Label noise <b id="nv">0.20</b></label>
+      <input type="range" id="noise" min="0.00" max="0.60" step="0.02" value="0.20">
+    </div>
+    <div class="sg">
+      <label>Steps/sec <b id="spv">18</b></label>
+      <input type="range" id="speed" min="2" max="50" step="1" value="18">
+    </div>
+    <div class="badge" id="status">step 0</div>
+    <button class="btn" id="play">Play</button>
+    <button class="btn" id="reset">Reset</button>
+    <button class="btn" id="regen">New data</button>
+  </div>
+
+  <div class="legend">
+    <div class="li"><span class="dot" style="background:#7dd3fc"></span>Full batch</div>
+    <div class="li"><span class="dot" style="background:#f0c040"></span>Mini-batch (8)</div>
+    <div class="li"><span class="dot" style="background:#fb7185"></span>SGD (1)</div>
+  </div>
+
+  <div class="layout">
+    <canvas id="traj" width="480" height="380"></canvas>
+    <canvas id="loss" width="320" height="380"></canvas>
+  </div>
+
+  <div class="info" id="info"></div>
+</div>
+
+<script>
+(function(){
+  const traj = document.getElementById('traj');
+  const tctx = traj.getContext('2d');
+  const lossCv = document.getElementById('loss');
+  const lctx = lossCv.getContext('2d');
+  const bg = document.createElement('canvas');
+  bg.width = traj.width;
+  bg.height = traj.height;
+  const bgx = bg.getContext('2d');
+
+  const colors = ['#7dd3fc', '#f0c040', '#fb7185'];
+  const labels = ['Full batch', 'Mini-batch 8', 'SGD 1'];
+  const batchSizes = [64, 8, 1];
+
+  let lr = 0.10;
+  let labelNoise = 0.20;
+  let speed = 18;
+  let running = false;
+  let lastFrame = null;
+  let dataSeed = 2;
+  let step = 0;
+  let data = [];
+  let optimum = [0, 0];
+  let bounds = {xmin:-4,xmax:4,ymin:-4,ymax:4};
+  let sharedPerm = [];
+  let sharedCursor = 0;
+  let states = [];
+
+  function mulberry32(seed){
+    return function(){
+      seed |= 0;
+      seed = seed + 0x6D2B79F5 | 0;
+      let t = Math.imul(seed ^ seed >>> 15, 1 | seed);
+      t ^= t + Math.imul(t ^ t >>> 7, 61 | t);
+      return ((t ^ t >>> 14) >>> 0) / 4294967296;
+    };
+  }
+
+  function randn(rng){
+    const u = Math.max(rng(), 1e-12);
+    const v = Math.max(rng(), 1e-12);
+    return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+  }
+
+  function shuffle(arr, rng){
+    for(let i = arr.length - 1; i > 0; i--){
+      const j = Math.floor(rng() * (i + 1));
+      const tmp = arr[i];
+      arr[i] = arr[j];
+      arr[j] = tmp;
+    }
+  }
+
+  function regenerateData(){
+    const rng = mulberry32(dataSeed++);
+    data = [];
+    const ca = Math.cos(Math.PI / 5);
+    const sa = Math.sin(Math.PI / 5);
+    const wStar = [2.2, -1.3];
+    for(let i = 0; i < 64; i++){
+      const z1 = 1.7 * randn(rng);
+      const z2 = 0.45 * randn(rng);
+      const x1 = ca * z1 - sa * z2;
+      const x2 = sa * z1 + ca * z2;
+      const y = wStar[0] * x1 + wStar[1] * x2 + labelNoise * randn(rng);
+      data.push({x1, x2, y});
+    }
+    solveOptimum();
+    recomputeBackground();
+  }
+
+  function solveOptimum(){
+    let a11 = 0, a12 = 0, a22 = 0, b1 = 0, b2 = 0;
+    for(const p of data){
+      a11 += p.x1 * p.x1;
+      a12 += p.x1 * p.x2;
+      a22 += p.x2 * p.x2;
+      b1 += p.x1 * p.y;
+      b2 += p.x2 * p.y;
+    }
+    const det = a11 * a22 - a12 * a12;
+    optimum = [
+      (a22 * b1 - a12 * b2) / det,
+      (-a12 * b1 + a11 * b2) / det
+    ];
+    bounds = {
+      xmin: optimum[0] - 4.2,
+      xmax: optimum[0] + 4.2,
+      ymin: optimum[1] - 4.0,
+      ymax: optimum[1] + 4.0
+    };
+  }
+
+  function lossAt(theta){
+    let total = 0;
+    for(const p of data){
+      const err = theta[0] * p.x1 + theta[1] * p.x2 - p.y;
+      total += 0.5 * err * err;
+    }
+    return total / data.length;
+  }
+
+  function gradAt(theta, indices){
+    let g1 = 0, g2 = 0;
+    for(const idx of indices){
+      const p = data[idx];
+      const err = theta[0] * p.x1 + theta[1] * p.x2 - p.y;
+      g1 += err * p.x1;
+      g2 += err * p.x2;
+    }
+    return [g1 / indices.length, g2 / indices.length];
+  }
+
+  function recomputeBackground(){
+    const W = bg.width;
+    const H = bg.height;
+    bgx.fillStyle = '#080816';
+    bgx.fillRect(0, 0, W, H);
+    const cellsX = 88;
+    const cellsY = 74;
+    const dx = (bounds.xmax - bounds.xmin) / cellsX;
+    const dy = (bounds.ymax - bounds.ymin) / cellsY;
+    const samples = [];
+    let lo = Infinity;
+    let hi = -Infinity;
+    for(let i = 0; i < cellsX; i++){
+      samples[i] = [];
+      for(let j = 0; j < cellsY; j++){
+        const x = bounds.xmin + (i + 0.5) * dx;
+        const y = bounds.ymin + (j + 0.5) * dy;
+        const v = Math.log(lossAt([x, y]) + 1e-5);
+        samples[i][j] = v;
+        lo = Math.min(lo, v);
+        hi = Math.max(hi, v);
+      }
+    }
+    const span = Math.max(0.5, hi - lo);
+    for(let i = 0; i < cellsX; i++){
+      for(let j = 0; j < cellsY; j++){
+        const t = (samples[i][j] - lo) / span;
+        const r = Math.floor(12 + 45 * t);
+        const g = Math.floor(18 + 30 * t);
+        const b = Math.floor(30 + 90 * (1 - t));
+        bgx.fillStyle = 'rgb(' + r + ',' + g + ',' + b + ')';
+        const x0 = mapX(bounds.xmin + i * dx);
+        const x1 = mapX(bounds.xmin + (i + 1) * dx);
+        const y0 = mapY(bounds.ymin + j * dy);
+        const y1 = mapY(bounds.ymin + (j + 1) * dy);
+        bgx.fillRect(x0, y1, x1 - x0 + 1, y0 - y1 + 1);
+      }
+    }
+
+    bgx.strokeStyle = '#26304d';
+    bgx.lineWidth = 1;
+    for(let i = Math.ceil(bounds.xmin); i <= bounds.xmax; i++){
+      const x = mapX(i);
+      bgx.beginPath();
+      bgx.moveTo(x, 0);
+      bgx.lineTo(x, H);
+      bgx.stroke();
+    }
+    for(let i = Math.ceil(bounds.ymin); i <= bounds.ymax; i++){
+      const y = mapY(i);
+      bgx.beginPath();
+      bgx.moveTo(0, y);
+      bgx.lineTo(W, y);
+      bgx.stroke();
+    }
+
+    bgx.strokeStyle = '#3b4568';
+    bgx.lineWidth = 1.3;
+    const ox = mapX(0);
+    const oy = mapY(0);
+    bgx.beginPath();
+    bgx.moveTo(0, oy);
+    bgx.lineTo(W, oy);
+    bgx.stroke();
+    bgx.beginPath();
+    bgx.moveTo(ox, 0);
+    bgx.lineTo(ox, H);
+    bgx.stroke();
+
+    const sx = mapX(optimum[0]);
+    const sy = mapY(optimum[1]);
+    bgx.strokeStyle = '#34d399';
+    bgx.lineWidth = 2;
+    bgx.beginPath();
+    bgx.moveTo(sx - 6, sy);
+    bgx.lineTo(sx + 6, sy);
+    bgx.moveTo(sx, sy - 6);
+    bgx.lineTo(sx, sy + 6);
+    bgx.stroke();
+  }
+
+  function mapX(x){
+    return (x - bounds.xmin) / (bounds.xmax - bounds.xmin) * traj.width;
+  }
+
+  function mapY(y){
+    return traj.height - (y - bounds.ymin) / (bounds.ymax - bounds.ymin) * traj.height;
+  }
+
+  function reset(){
+    step = 0;
+    sharedPerm = Array.from({length:data.length}, (_, i) => i);
+    sharedCursor = 0;
+    states = batchSizes.map(function(size, idx){
+      return {
+        size,
+        theta: [optimum[0] - 3.2, optimum[1] + 2.7],
+        traj: [],
+        losses: [],
+        variance: 0
+      };
+    });
+    for(const state of states){
+      state.traj.push(state.theta.slice());
+      state.losses.push(lossAt(state.theta));
+    }
+    running = false;
+    lastFrame = null;
+    document.getElementById('play').textContent = 'Play';
+    draw();
+    updateInfo();
+  }
+
+  function nextIndices(size){
+    const out = [];
+    while(out.length < size){
+      if(sharedCursor >= sharedPerm.length){
+        const rng = mulberry32(1000 + step + dataSeed);
+        shuffle(sharedPerm, rng);
+        sharedCursor = 0;
+      }
+      out.push(sharedPerm[sharedCursor++]);
+    }
+    return out;
+  }
+
+  function trainStep(){
+    const batchLookup = {};
+    for(const size of batchSizes){
+      batchLookup[size] = nextIndices(size);
+    }
+    for(let i = 0; i < states.length; i++){
+      const state = states[i];
+      const fullGrad = gradAt(state.theta, batchLookup[64]);
+      const grad = gradAt(state.theta, batchLookup[state.size]);
+      const dv = Math.hypot(grad[0] - fullGrad[0], grad[1] - fullGrad[1]);
+      state.variance = 0.92 * state.variance + 0.08 * dv;
+      state.theta[0] -= lr * grad[0];
+      state.theta[1] -= lr * grad[1];
+      state.traj.push(state.theta.slice());
+      state.losses.push(lossAt(state.theta));
+      if(state.traj.length > 260) state.traj.shift();
+      if(state.losses.length > 260) state.losses.shift();
+    }
+    step++;
+  }
+
+  function drawTrajectories(){
+    tctx.drawImage(bg, 0, 0);
+    tctx.fillStyle = '#9aa5c1';
+    tctx.font = '11px monospace';
+    tctx.fillText('parameter space: w1 vs w2', 8, 16);
+    for(let i = 0; i < states.length; i++){
+      const state = states[i];
+      tctx.strokeStyle = colors[i];
+      tctx.lineWidth = 1.8;
+      tctx.beginPath();
+      state.traj.forEach(function(p, idx){
+        const x = mapX(p[0]);
+        const y = mapY(p[1]);
+        if(idx === 0) tctx.moveTo(x, y);
+        else tctx.lineTo(x, y);
+      });
+      tctx.stroke();
+
+      for(let j = 0; j < state.traj.length; j += 8){
+        const p = state.traj[j];
+        const x = mapX(p[0]);
+        const y = mapY(p[1]);
+        tctx.fillStyle = colors[i] + '66';
+        tctx.beginPath();
+        tctx.arc(x, y, 1.8, 0, Math.PI * 2);
+        tctx.fill();
+      }
+
+      const cur = state.traj[state.traj.length - 1];
+      const x = mapX(cur[0]);
+      const y = mapY(cur[1]);
+      tctx.shadowColor = colors[i];
+      tctx.shadowBlur = 12;
+      tctx.fillStyle = colors[i];
+      tctx.beginPath();
+      tctx.arc(x, y, 5.5, 0, Math.PI * 2);
+      tctx.fill();
+      tctx.shadowBlur = 0;
+    }
+  }
+
+  function drawLosses(){
+    const W = lossCv.width;
+    const H = lossCv.height;
+    const pad = {l:42, r:10, t:18, b:24};
+    lctx.fillStyle = '#080816';
+    lctx.fillRect(0, 0, W, H);
+    lctx.fillStyle = '#9aa5c1';
+    lctx.font = '11px monospace';
+    lctx.fillText('mini-batch loss (log scale)', 8, 14);
+
+    const all = states.flatMap(function(s){ return s.losses; });
+    const lo = Math.log(Math.max(1e-6, Math.min.apply(null, all)));
+    const hi = Math.log(Math.max.apply(null, all) + 1e-6);
+    const span = Math.max(0.7, hi - lo);
+
+    lctx.strokeStyle = '#253250';
+    lctx.lineWidth = 1;
+    for(let i = 0; i < 5; i++){
+      const y = pad.t + (H - pad.t - pad.b) * i / 4;
+      lctx.beginPath();
+      lctx.moveTo(pad.l, y);
+      lctx.lineTo(W - pad.r, y);
+      lctx.stroke();
+    }
+    lctx.beginPath();
+    lctx.moveTo(pad.l, pad.t);
+    lctx.lineTo(pad.l, H - pad.b);
+    lctx.lineTo(W - pad.r, H - pad.b);
+    lctx.stroke();
+
+    function px(i, n){
+      return pad.l + (W - pad.l - pad.r) * i / Math.max(1, n - 1);
+    }
+
+    function py(v){
+      return pad.t + (H - pad.t - pad.b) * (hi - Math.log(v + 1e-6)) / span;
+    }
+
+    for(let i = 0; i < states.length; i++){
+      const losses = states[i].losses;
+      lctx.strokeStyle = colors[i];
+      lctx.lineWidth = 1.8;
+      lctx.beginPath();
+      losses.forEach(function(v, idx){
+        if(idx === 0) lctx.moveTo(px(idx, losses.length), py(v));
+        else lctx.lineTo(px(idx, losses.length), py(v));
+      });
+      lctx.stroke();
+    }
+
+    lctx.fillStyle = '#64748b';
+    lctx.fillText('step ' + step, W - 68, H - 6);
+  }
+
+  function updateInfo(){
+    document.getElementById('status').textContent = 'step ' + step;
+    const rows = states.map(function(state, i){
+      return '<span style="color:' + colors[i] + '"><b>' + labels[i] + '</b></span>: loss ' +
+        state.losses[state.losses.length - 1].toFixed(4) +
+        ', gradient noise ' + state.variance.toFixed(3);
+    }).join('<br>');
+    document.getElementById('info').innerHTML =
+      '<b>True optimum</b>: w* = (' + optimum[0].toFixed(2) + ', ' + optimum[1].toFixed(2) + ')' +
+      '<br>' + rows +
+      '<br><b>Reading the plot</b>: full-batch descent follows the smooth quadratic bowl, while smaller batches wander because each update only sees a noisy subset of the dataset.';
+  }
+
+  function draw(){
+    drawTrajectories();
+    drawLosses();
+    updateInfo();
+  }
+
+  function loop(ts){
+    if(!running) return;
+    if(lastFrame == null) lastFrame = ts;
+    const want = Math.floor((ts - lastFrame) / 1000 * speed);
+    if(want > 0){
+      const stepsNow = Math.min(want, 10);
+      for(let i = 0; i < stepsNow; i++) trainStep();
+      lastFrame = ts;
+      draw();
+    }
+    requestAnimationFrame(loop);
+  }
+
+  function sync(){
+    lr = +document.getElementById('lr').value;
+    labelNoise = +document.getElementById('noise').value;
+    speed = +document.getElementById('speed').value;
+    document.getElementById('lrv').textContent = lr.toFixed(2);
+    document.getElementById('nv').textContent = labelNoise.toFixed(2);
+    document.getElementById('spv').textContent = speed;
+  }
+
+  document.getElementById('lr').addEventListener('input', function(){ sync(); draw(); });
+  document.getElementById('noise').addEventListener('input', function(){
+    sync();
+    regenerateData();
+    reset();
+  });
+  document.getElementById('speed').addEventListener('input', sync);
+  document.getElementById('play').addEventListener('click', function(){
+    running = !running;
+    document.getElementById('play').textContent = running ? 'Pause' : 'Play';
+    if(running){
+      lastFrame = null;
+      requestAnimationFrame(loop);
+    }
+  });
+  document.getElementById('reset').addEventListener('click', reset);
+  document.getElementById('regen').addEventListener('click', function(){
+    regenerateData();
+    reset();
+  });
+
+  sync();
+  regenerateData();
+  reset();
+})();
+</script>

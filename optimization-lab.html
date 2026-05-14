@@ -1,0 +1,91 @@
+---
+layout: page
+title: Optimization Lab
+description: "Six interactive lessons on gradient descent, SGD, momentum, adaptive optimizers, schedules, and Newton-style curvature methods."
+permalink: /optimization-lab/
+exclude_nav: true
+---
+
+<p class="ol-intro">Six lessons on the mathematics of optimization for deep learning, published May 1 through May 7, 2026. Each lesson pairs the theory with a live in-browser visualization.</p>
+
+<h2 class="ol-heading">Labs</h2>
+
+<ol class="ol-list">
+{% assign o_posts = site.posts | where_exp: "post", "post.title contains 'Optimization Lab'" | sort: "date" %}
+{% for post in o_posts %}
+  <li>
+    <a href="{{ post.url }}">{{ post.title | remove: "Optimization Lab " }}</a>
+    <span class="ol-date">{{ post.date | date: "%b %d, %Y" }}</span>
+  </li>
+{% endfor %}
+</ol>
+
+<h2 class="ol-heading">Live Demos</h2>
+
+<div class="ol-grid">
+  <a class="ol-card" href="/train-deep-learning/opt-gradient-descent/" target="_blank" rel="noopener">
+    <span class="ol-icon">&#x2935;</span>
+    <span class="ol-label">Gradient Descent</span>
+    <span class="ol-sub">Learning rate &amp; conditioning</span>
+  </a>
+  <a class="ol-card" href="/train-deep-learning/opt-sgd-batches/" target="_blank" rel="noopener">
+    <span class="ol-icon">&#x1F3B2;</span>
+    <span class="ol-label">SGD vs Mini-batch</span>
+    <span class="ol-sub">Noise &amp; batch size</span>
+  </a>
+  <a class="ol-card" href="/train-deep-learning/opt-momentum/" target="_blank" rel="noopener">
+    <span class="ol-icon">&#x26A1;</span>
+    <span class="ol-label">Momentum &amp; Nesterov</span>
+    <span class="ol-sub">Accelerating descent</span>
+  </a>
+  <a class="ol-card" href="/train-deep-learning/opt-adam-family/" target="_blank" rel="noopener">
+    <span class="ol-icon">&#x269B;</span>
+    <span class="ol-label">Adaptive Optimizers</span>
+    <span class="ol-sub">Adagrad · RMSProp · Adam</span>
+  </a>
+  <a class="ol-card" href="/train-deep-learning/opt-lr-schedules/" target="_blank" rel="noopener">
+    <span class="ol-icon">&#x1F4C9;</span>
+    <span class="ol-label">LR Schedules</span>
+    <span class="ol-sub">Decay · cosine · warmup</span>
+  </a>
+  <a class="ol-card" href="/train-deep-learning/opt-newton/" target="_blank" rel="noopener">
+    <span class="ol-icon">&#x25CE;</span>
+    <span class="ol-label">Newton &amp; Curvature</span>
+    <span class="ol-sub">Second-order geometry</span>
+  </a>
+</div>
+
+<style>
+.ol-intro { opacity: 0.75; margin-bottom: 1.5rem; }
+
+.ol-heading { margin-top: 2rem; padding-bottom: 0.3rem; border-bottom: 2px solid currentColor; opacity: 0.85; }
+
+.ol-list { padding-left: 1.2rem; }
+.ol-list li { padding: 0.35rem 0; display: flex; align-items: baseline; gap: 0.6rem; }
+.ol-list a { flex: 1; }
+.ol-date { font-size: 0.78rem; opacity: 0.5; white-space: nowrap; }
+
+.ol-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+.ol-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 1rem 0.5rem;
+  border: 1px solid currentColor;
+  border-radius: 10px;
+  text-decoration: none;
+  opacity: 0.75;
+  transition: opacity 0.15s;
+  text-align: center;
+}
+.ol-card:hover { opacity: 1; }
+.ol-icon { font-size: 1.8rem; }
+.ol-label { font-size: 0.85rem; font-weight: 600; line-height: 1.3; }
+.ol-sub { font-size: 0.72rem; opacity: 0.6; line-height: 1.3; }
+</style>

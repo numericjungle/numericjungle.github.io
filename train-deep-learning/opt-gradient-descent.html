@@ -1,0 +1,261 @@
+---
+layout: embed
+title: Optimization Lab 1 – Gradient Descent
+permalink: /train-deep-learning/opt-gradient-descent/
+---
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:system-ui,sans-serif;background:#0d0d1a;color:#ccc;padding:10px}
+#wrap{max-width:780px;margin:0 auto}
+.ctrl{display:flex;flex-wrap:wrap;gap:12px;align-items:center;background:#141426;border-radius:8px;padding:10px 14px;margin-bottom:8px}
+.sg{display:flex;flex-direction:column;gap:3px;min-width:170px}
+.sg label{font-size:12px;color:#888}
+.sg label b{color:#7ec8ff}
+input[type=range]{width:100%;accent-color:#7ec8ff}
+.badge{background:#101830;border:1px solid #f0c040;color:#f0c040;border-radius:5px;padding:4px 12px;font-size:13px}
+.btn{background:transparent;border:1px solid #7ec8ff88;color:#7ec8ffbb;border-radius:5px;padding:5px 14px;cursor:pointer;font-size:12px}
+.btn:hover{border-color:#7ec8ff;color:#7ec8ff}
+canvas{display:block;width:100%;border-radius:8px;margin:6px 0;background:#080816}
+.warn{background:#3a0a0a;border:1px solid #ff5555;color:#ff8888;border-radius:6px;padding:6px 12px;font-size:12px;margin:6px 0;display:none}
+.warn.on{display:block}
+.row{display:grid;grid-template-columns:1.4fr 1fr;gap:8px}
+@media(max-width:680px){.row{grid-template-columns:1fr}}
+.sbox{background:#141426;border-radius:8px;padding:8px 12px;font-size:12px;font-family:monospace;color:#aaa}
+.sbox b{color:#7ec8ff}
+.k{color:#f0c040}
+</style>
+
+<div id="wrap">
+  <div class="ctrl">
+    <div class="sg">
+      <label>Learning rate η = <b id="lrv">0.10</b></label>
+      <input type="range" id="lr" min="0.005" max="1.5" step="0.005" value="0.1">
+    </div>
+    <div class="sg">
+      <label>Condition number κ = <b id="kv">5</b></label>
+      <input type="range" id="k" min="1" max="40" step="1" value="5">
+    </div>
+    <div class="sg">
+      <label>Steps/sec <b id="spv">10</b></label>
+      <input type="range" id="sp" min="1" max="60" step="1" value="10">
+    </div>
+    <div class="badge" id="status">step 0</div>
+    <button class="btn" id="ply">▶ Play</button>
+    <button class="btn" id="rst">↺ Reset</button>
+  </div>
+  <div class="warn" id="warn">⚠ Diverging — η · max-eigenvalue exceeds 2. Lower the learning rate.</div>
+  <div class="row">
+    <canvas id="cv" width="500" height="380"></canvas>
+    <canvas id="lc" width="350" height="380"></canvas>
+  </div>
+  <div class="sbox">
+    f(x,y) = ½(x² + κ·y²)  &nbsp; ∇f = (x, κ·y)  &nbsp; update: <span class="k">θ ← θ − η ∇f(θ)</span>
+    <br>Stable iff η &lt; 2/L where L = max eigenvalue of Hessian = κ.
+    Optimal η<sup>*</sup> = <b id="optlr">—</b>. Convergence rate ≈ <b id="rate">—</b> per step.
+  </div>
+</div>
+
+<script>
+const cv = document.getElementById('cv'), cx = cv.getContext('2d');
+const lc = document.getElementById('lc'), lx = lc.getContext('2d');
+const W = cv.width, H = cv.height;
+
+let lr = 0.1, kappa = 5, sps = 10;
+let theta, hist, lossHist, step, running, lastT;
+
+function f(x,y){ return 0.5*(x*x + kappa*y*y); }
+function grad(x,y){ return [x, kappa*y]; }
+
+function reset(){
+  theta = [3.5, 1.2];
+  hist = [theta.slice()];
+  lossHist = [f(theta[0], theta[1])];
+  step = 0;
+  document.getElementById('warn').className = 'warn';
+  draw(); drawLoss(); updStatus();
+}
+
+function gdStep(){
+  const [gx, gy] = grad(theta[0], theta[1]);
+  theta[0] -= lr * gx;
+  theta[1] -= lr * gy;
+  hist.push(theta.slice());
+  if (hist.length > 600) hist.shift();
+  const lv = f(theta[0], theta[1]);
+  lossHist.push(lv);
+  if (lossHist.length > 600) lossHist.shift();
+  step++;
+  if (lv > 1e6 || !isFinite(lv)) {
+    document.getElementById('warn').className = 'warn on';
+    running = false; document.getElementById('ply').textContent = '▶ Play';
+  }
+}
+
+// world coords [-5,5] x [-3,3] → canvas
+const X0=-5, X1=5, Y0=-3, Y1=3;
+function W2C(x,y){
+  return [(x-X0)/(X1-X0)*W, H - (y-Y0)/(Y1-Y0)*H];
+}
+
+function drawContours(){
+  cx.fillStyle = '#080816'; cx.fillRect(0,0,W,H);
+  // contour fill via colored levels
+  const levels = [0.5, 1, 2, 4, 8, 16, 32, 64];
+  // Sample a grid and shade by which band the value falls in
+  const cellsX = 100, cellsY = 76;
+  const dx = (X1-X0)/cellsX, dy = (Y1-Y0)/cellsY;
+  for (let i=0;i<cellsX;i++){
+    for (let j=0;j<cellsY;j++){
+      const x = X0 + (i+0.5)*dx;
+      const y = Y0 + (j+0.5)*dy;
+      const v = f(x,y);
+      let band = 0; while (band<levels.length && v>levels[band]) band++;
+      const t = band/levels.length;
+      const r = Math.floor(20 + t*60);
+      const g = Math.floor(20 + t*30);
+      const b = Math.floor(40 + (1-t)*60);
+      cx.fillStyle = `rgb(${r},${g},${b})`;
+      const [px,py] = W2C(x, y);
+      const [px2,py2] = W2C(x+dx, y-dy);
+      cx.fillRect(px-1, py-1, px2-px+2, py2-py+2);
+    }
+  }
+  // contour lines
+  cx.lineWidth = 0.8;
+  for (const lv of levels){
+    cx.strokeStyle = '#3b3b5e';
+    cx.beginPath();
+    // ellipse: x²/(2lv) + κ y²/(2lv) = 1 → semi-axes a=√(2lv), b=√(2lv/κ)
+    const a = Math.sqrt(2*lv), b = Math.sqrt(2*lv/kappa);
+    const [cxp,cyp] = W2C(0,0);
+    cx.ellipse(cxp, cyp, a*W/(X1-X0), b*H/(Y1-Y0), 0, 0, Math.PI*2);
+    cx.stroke();
+  }
+  // axes
+  cx.strokeStyle = '#252550'; cx.lineWidth = 1;
+  const [ox,oy] = W2C(0,0);
+  cx.beginPath(); cx.moveTo(0,oy); cx.lineTo(W,oy); cx.stroke();
+  cx.beginPath(); cx.moveTo(ox,0); cx.lineTo(ox,H); cx.stroke();
+}
+
+function drawTrajectory(){
+  // line trail
+  cx.strokeStyle = '#f0c040'; cx.lineWidth = 1.5;
+  cx.beginPath();
+  hist.forEach((p,i)=>{
+    const [px,py] = W2C(p[0],p[1]);
+    i===0 ? cx.moveTo(px,py) : cx.lineTo(px,py);
+  });
+  cx.stroke();
+  // dots
+  cx.fillStyle = '#f0c04088';
+  hist.forEach(p=>{
+    const [px,py] = W2C(p[0],p[1]);
+    cx.beginPath(); cx.arc(px,py,1.6,0,Math.PI*2); cx.fill();
+  });
+  // current
+  const [px,py] = W2C(theta[0],theta[1]);
+  cx.shadowColor = '#50dd80'; cx.shadowBlur = 12;
+  cx.fillStyle = '#50dd80';
+  cx.beginPath(); cx.arc(px,py,6,0,Math.PI*2); cx.fill();
+  cx.shadowBlur = 0;
+  // gradient arrow
+  const [gx,gy] = grad(theta[0],theta[1]);
+  const gn = Math.hypot(gx,gy);
+  if (gn>0.001){
+    const ux = gx/gn, uy = gy/gn;
+    const tipX = theta[0] - ux*0.7, tipY = theta[1] - uy*0.7;
+    const [tx,ty] = W2C(tipX, tipY);
+    cx.strokeStyle = '#7ec8ff'; cx.lineWidth = 1.8;
+    cx.beginPath(); cx.moveTo(px,py); cx.lineTo(tx,ty); cx.stroke();
+    // arrowhead
+    const ang = Math.atan2(ty-py, tx-px);
+    cx.beginPath(); cx.moveTo(tx,ty);
+    cx.lineTo(tx - 7*Math.cos(ang-0.4), ty - 7*Math.sin(ang-0.4));
+    cx.lineTo(tx - 7*Math.cos(ang+0.4), ty - 7*Math.sin(ang+0.4));
+    cx.fillStyle = '#7ec8ff'; cx.fill();
+  }
+  // origin marker (minimum)
+  const [mx,my] = W2C(0,0);
+  cx.strokeStyle = '#ff7777'; cx.lineWidth = 1.5;
+  cx.beginPath(); cx.moveTo(mx-5,my); cx.lineTo(mx+5,my); cx.stroke();
+  cx.beginPath(); cx.moveTo(mx,my-5); cx.lineTo(mx,my+5); cx.stroke();
+}
+
+function draw(){
+  drawContours();
+  drawTrajectory();
+}
+
+function drawLoss(){
+  const w = lc.width, h = lc.height;
+  lx.fillStyle = '#080816'; lx.fillRect(0,0,w,h);
+  lx.fillStyle = '#aaa'; lx.font = '11px monospace';
+  lx.fillText('Loss (log-scale)', 6, 14);
+  if (lossHist.length<2) return;
+  const lo = Math.log(Math.max(1e-12, Math.min(...lossHist)));
+  const hi = Math.log(Math.max(...lossHist) + 1e-12);
+  const span = Math.max(0.5, hi-lo);
+  const PL=36, PR=8, PT=22, PB=20;
+  // grid
+  lx.strokeStyle = '#252550'; lx.lineWidth = 1;
+  for (let i=0;i<5;i++){
+    const y = PT + (h-PT-PB)*i/4;
+    lx.beginPath(); lx.moveTo(PL,y); lx.lineTo(w-PR,y); lx.stroke();
+    const v = Math.exp(hi - span*i/4);
+    lx.fillStyle = '#555'; lx.fillText(v.toExponential(1), 2, y+3);
+  }
+  lx.strokeStyle = '#50dd80'; lx.lineWidth = 1.6;
+  lx.beginPath();
+  lossHist.forEach((v,i)=>{
+    const x = PL + (w-PL-PR)*i/Math.max(1,lossHist.length-1);
+    const y = PT + (h-PT-PB)*(hi - Math.log(v+1e-12))/span;
+    i===0 ? lx.moveTo(x,y) : lx.lineTo(x,y);
+  });
+  lx.stroke();
+  lx.fillStyle='#888'; lx.fillText(`step ${step}`, w-70, h-6);
+}
+
+function updStatus(){
+  document.getElementById('status').textContent = `step ${step} · loss ${f(theta[0],theta[1]).toExponential(2)}`;
+  // optimal lr for quadratic is 2/(λ_min + λ_max) = 2/(1+κ)
+  const optlr = 2/(1+kappa);
+  // convergence rate per step ~ (κ-1)/(κ+1)
+  const rate = (kappa-1)/(kappa+1);
+  document.getElementById('optlr').textContent = optlr.toFixed(3);
+  document.getElementById('rate').textContent = rate.toFixed(3);
+}
+
+function loop(t){
+  if (!running) return;
+  if (lastT==null) lastT = t;
+  const dt = (t-lastT)/1000;
+  const want = Math.floor(dt*sps);
+  if (want>0){
+    for (let i=0;i<want && i<10;i++) gdStep();
+    lastT = t;
+    draw(); drawLoss(); updStatus();
+  }
+  requestAnimationFrame(loop);
+}
+
+function sync(){
+  lr = +document.getElementById('lr').value;
+  kappa = +document.getElementById('k').value;
+  sps = +document.getElementById('sp').value;
+  document.getElementById('lrv').textContent = lr.toFixed(3);
+  document.getElementById('kv').textContent = kappa;
+  document.getElementById('spv').textContent = sps;
+  drawContours(); drawTrajectory(); updStatus();
+}
+
+['lr','k','sp'].forEach(id=>document.getElementById(id).addEventListener('input',sync));
+document.getElementById('rst').addEventListener('click',()=>{ reset(); });
+document.getElementById('ply').addEventListener('click',()=>{
+  running = !running;
+  document.getElementById('ply').textContent = running ? '⏸ Pause' : '▶ Play';
+  if (running){ lastT=null; requestAnimationFrame(loop); }
+});
+
+reset();
+</script>

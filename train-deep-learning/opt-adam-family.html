@@ -1,0 +1,484 @@
+---
+layout: embed
+title: Optimization Lab 4 - Adaptive Optimizers
+permalink: /train-deep-learning/opt-adam-family/
+---
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:system-ui,sans-serif;background:#0d0d1a;color:#cbd5e1;padding:10px}
+#app{max-width:820px;margin:0 auto}
+.ctrl{display:flex;flex-wrap:wrap;gap:12px;align-items:center;background:#141426;border-radius:8px;padding:10px 14px;margin-bottom:8px}
+.sg{display:flex;flex-direction:column;gap:3px;min-width:150px}
+.sg label{font-size:12px;color:#94a3b8}
+.sg label b{color:#7dd3fc}
+input[type=range]{width:100%;accent-color:#7dd3fc}
+.badge{background:#101830;border:1px solid #f0c040;color:#f0c040;border-radius:5px;padding:4px 12px;font-size:13px}
+.btn{background:transparent;border:1px solid #7dd3fc66;color:#bae6fd;border-radius:5px;padding:5px 14px;cursor:pointer;font-size:12px}
+.btn:hover{border-color:#7dd3fc;color:#e0f2fe}
+.layout{display:grid;grid-template-columns:1.45fr 1fr;gap:8px}
+@media(max-width:760px){.layout{grid-template-columns:1fr}}
+.stack{display:grid;grid-template-rows:1fr auto;gap:8px}
+canvas{display:block;width:100%;border-radius:8px;background:#080816}
+.legend{display:flex;gap:12px;flex-wrap:wrap;font-size:11px;color:#94a3b8;margin:6px 0 2px}
+.li{display:flex;align-items:center;gap:6px}
+.dot{width:10px;height:10px;border-radius:50%}
+.info{background:#141426;border-radius:8px;padding:10px 14px;margin-top:8px;font-size:12px;line-height:1.7;color:#94a3b8}
+</style>
+
+<div id="app">
+  <div class="ctrl">
+    <div class="sg">
+      <label>Base learning rate <b id="lrv">0.20</b></label>
+      <input type="range" id="lr" min="0.02" max="0.50" step="0.02" value="0.20">
+    </div>
+    <div class="sg">
+      <label>Sparse feature activity <b id="sv">0.12</b></label>
+      <input type="range" id="sparse" min="0.05" max="0.40" step="0.01" value="0.12">
+    </div>
+    <div class="sg">
+      <label>Steps/sec <b id="spv">22</b></label>
+      <input type="range" id="speed" min="4" max="50" step="1" value="22">
+    </div>
+    <div class="badge" id="status">step 0</div>
+    <button class="btn" id="play">Play</button>
+    <button class="btn" id="reset">Reset</button>
+    <button class="btn" id="regen">New data</button>
+  </div>
+
+  <div class="legend">
+    <div class="li"><span class="dot" style="background:#7dd3fc"></span>Adagrad</div>
+    <div class="li"><span class="dot" style="background:#f0c040"></span>RMSProp</div>
+    <div class="li"><span class="dot" style="background:#34d399"></span>Adam</div>
+  </div>
+
+  <div class="layout">
+    <canvas id="traj" width="500" height="390"></canvas>
+    <div class="stack">
+      <canvas id="loss" width="300" height="250"></canvas>
+      <canvas id="bars" width="300" height="132"></canvas>
+    </div>
+  </div>
+
+  <div class="info" id="info"></div>
+</div>
+
+<script>
+(function(){
+  const traj = document.getElementById('traj');
+  const tctx = traj.getContext('2d');
+  const lossCv = document.getElementById('loss');
+  const lctx = lossCv.getContext('2d');
+  const barsCv = document.getElementById('bars');
+  const bctx = barsCv.getContext('2d');
+  const bg = document.createElement('canvas');
+  bg.width = traj.width;
+  bg.height = traj.height;
+  const bgx = bg.getContext('2d');
+
+  const colors = ['#7dd3fc', '#f0c040', '#34d399'];
+  const labels = ['Adagrad', 'RMSProp', 'Adam'];
+  const bounds = {xmin:-0.6,xmax:3.4,ymin:-2.8,ymax:1.2};
+
+  let lr = 0.20;
+  let sparseProb = 0.12;
+  let speed = 22;
+  let running = false;
+  let step = 0;
+  let seed = 8;
+  let data = [];
+  let optimum = [0, 0];
+  let order = [];
+  let cursor = 0;
+  let states = [];
+  let lastFrame = null;
+
+  function mulberry32(seed0){
+    return function(){
+      seed0 |= 0;
+      seed0 = seed0 + 0x6D2B79F5 | 0;
+      let t = Math.imul(seed0 ^ seed0 >>> 15, 1 | seed0);
+      t ^= t + Math.imul(t ^ t >>> 7, 61 | t);
+      return ((t ^ t >>> 14) >>> 0) / 4294967296;
+    };
+  }
+
+  function randn(rng){
+    const u = Math.max(rng(), 1e-12);
+    const v = Math.max(rng(), 1e-12);
+    return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+  }
+
+  function shuffle(arr, rng){
+    for(let i = arr.length - 1; i > 0; i--){
+      const j = Math.floor(rng() * (i + 1));
+      const tmp = arr[i];
+      arr[i] = arr[j];
+      arr[j] = tmp;
+    }
+  }
+
+  function generateData(){
+    const rng = mulberry32(seed++);
+    data = [];
+    for(let i = 0; i < 160; i++){
+      const active = rng() < sparseProb ? 1 : 0;
+      const x1 = active ? 2.8 * randn(rng) : 0;
+      const x2 = randn(rng);
+      const y = 2.0 * x1 - 1.2 * x2 + 0.15 * randn(rng);
+      data.push({x1, x2, y, active});
+    }
+    solveOptimum();
+    rebuildBackground();
+  }
+
+  function solveOptimum(){
+    let a11 = 0, a12 = 0, a22 = 0, b1 = 0, b2 = 0;
+    for(const p of data){
+      a11 += p.x1 * p.x1;
+      a12 += p.x1 * p.x2;
+      a22 += p.x2 * p.x2;
+      b1 += p.x1 * p.y;
+      b2 += p.x2 * p.y;
+    }
+    const det = a11 * a22 - a12 * a12;
+    optimum = [
+      (a22 * b1 - a12 * b2) / det,
+      (-a12 * b1 + a11 * b2) / det
+    ];
+  }
+
+  function lossAt(theta){
+    let total = 0;
+    for(const p of data){
+      const err = theta[0] * p.x1 + theta[1] * p.x2 - p.y;
+      total += 0.5 * err * err;
+    }
+    return total / data.length;
+  }
+
+  function gradAt(theta, sample){
+    const err = theta[0] * sample.x1 + theta[1] * sample.x2 - sample.y;
+    return [err * sample.x1, err * sample.x2];
+  }
+
+  function rebuildBackground(){
+    bgx.fillStyle = '#080816';
+    bgx.fillRect(0, 0, bg.width, bg.height);
+    const cellsX = 88;
+    const cellsY = 74;
+    const dx = (bounds.xmax - bounds.xmin) / cellsX;
+    const dy = (bounds.ymax - bounds.ymin) / cellsY;
+    const levels = [];
+    let lo = Infinity;
+    let hi = -Infinity;
+    for(let i = 0; i < cellsX; i++){
+      levels[i] = [];
+      for(let j = 0; j < cellsY; j++){
+        const x = bounds.xmin + (i + 0.5) * dx;
+        const y = bounds.ymin + (j + 0.5) * dy;
+        const v = Math.log(lossAt([x, y]) + 1e-5);
+        levels[i][j] = v;
+        lo = Math.min(lo, v);
+        hi = Math.max(hi, v);
+      }
+    }
+    const span = Math.max(0.5, hi - lo);
+    for(let i = 0; i < cellsX; i++){
+      for(let j = 0; j < cellsY; j++){
+        const t = (levels[i][j] - lo) / span;
+        const r = Math.floor(10 + 40 * t);
+        const g = Math.floor(18 + 30 * t);
+        const b = Math.floor(32 + 82 * (1 - t));
+        bgx.fillStyle = 'rgb(' + r + ',' + g + ',' + b + ')';
+        const x0 = mapX(bounds.xmin + i * dx);
+        const x1 = mapX(bounds.xmin + (i + 1) * dx);
+        const y0 = mapY(bounds.ymin + j * dy);
+        const y1 = mapY(bounds.ymin + (j + 1) * dy);
+        bgx.fillRect(x0, y1, x1 - x0 + 1, y0 - y1 + 1);
+      }
+    }
+    bgx.strokeStyle = '#26304d';
+    bgx.lineWidth = 1;
+    for(let i = -1; i <= 3; i++){
+      const x = mapX(i);
+      bgx.beginPath();
+      bgx.moveTo(x, 0);
+      bgx.lineTo(x, bg.height);
+      bgx.stroke();
+    }
+    for(let i = -2; i <= 1; i++){
+      const y = mapY(i);
+      bgx.beginPath();
+      bgx.moveTo(0, y);
+      bgx.lineTo(bg.width, y);
+      bgx.stroke();
+    }
+    const ox = mapX(optimum[0]);
+    const oy = mapY(optimum[1]);
+    bgx.strokeStyle = '#f8fafc';
+    bgx.lineWidth = 1.6;
+    bgx.beginPath();
+    bgx.moveTo(ox - 5, oy);
+    bgx.lineTo(ox + 5, oy);
+    bgx.moveTo(ox, oy - 5);
+    bgx.lineTo(ox, oy + 5);
+    bgx.stroke();
+  }
+
+  function mapX(x){
+    return (x - bounds.xmin) / (bounds.xmax - bounds.xmin) * traj.width;
+  }
+
+  function mapY(y){
+    return traj.height - (y - bounds.ymin) / (bounds.ymax - bounds.ymin) * traj.height;
+  }
+
+  function reset(){
+    running = false;
+    lastFrame = null;
+    step = 0;
+    order = Array.from({length:data.length}, (_, i) => i);
+    shuffle(order, mulberry32(300 + seed));
+    cursor = 0;
+    states = [
+      {theta:[0,0], acc:[0,0], traj:[[0,0]], losses:[lossAt([0,0])], scales:[lr, lr], m:[0,0], v:[0,0], t:0},
+      {theta:[0,0], acc:[0,0], traj:[[0,0]], losses:[lossAt([0,0])], scales:[lr, lr], m:[0,0], v:[0,0], t:0},
+      {theta:[0,0], acc:[0,0], traj:[[0,0]], losses:[lossAt([0,0])], scales:[lr, lr], m:[0,0], v:[0,0], t:0}
+    ];
+    document.getElementById('play').textContent = 'Play';
+    draw();
+  }
+
+  function nextSample(){
+    if(cursor >= order.length){
+      shuffle(order, mulberry32(500 + step + seed));
+      cursor = 0;
+    }
+    return data[order[cursor++]];
+  }
+
+  function advanceOne(){
+    const sample = nextSample();
+    const eps = 1e-8;
+    const rho = 0.95;
+    const b1 = 0.9;
+    const b2 = 0.999;
+
+    for(let i = 0; i < states.length; i++){
+      const state = states[i];
+      const g = gradAt(state.theta, sample);
+      if(i === 0){
+        state.acc[0] += g[0] * g[0];
+        state.acc[1] += g[1] * g[1];
+        state.scales = [
+          lr / (Math.sqrt(state.acc[0]) + eps),
+          lr / (Math.sqrt(state.acc[1]) + eps)
+        ];
+        state.theta[0] -= state.scales[0] * g[0];
+        state.theta[1] -= state.scales[1] * g[1];
+      } else if(i === 1){
+        state.acc[0] = rho * state.acc[0] + (1 - rho) * g[0] * g[0];
+        state.acc[1] = rho * state.acc[1] + (1 - rho) * g[1] * g[1];
+        state.scales = [
+          lr / (Math.sqrt(state.acc[0]) + eps),
+          lr / (Math.sqrt(state.acc[1]) + eps)
+        ];
+        state.theta[0] -= state.scales[0] * g[0];
+        state.theta[1] -= state.scales[1] * g[1];
+      } else {
+        state.t += 1;
+        state.m[0] = b1 * state.m[0] + (1 - b1) * g[0];
+        state.m[1] = b1 * state.m[1] + (1 - b1) * g[1];
+        state.v[0] = b2 * state.v[0] + (1 - b2) * g[0] * g[0];
+        state.v[1] = b2 * state.v[1] + (1 - b2) * g[1] * g[1];
+        const mh0 = state.m[0] / (1 - Math.pow(b1, state.t));
+        const mh1 = state.m[1] / (1 - Math.pow(b1, state.t));
+        const vh0 = state.v[0] / (1 - Math.pow(b2, state.t));
+        const vh1 = state.v[1] / (1 - Math.pow(b2, state.t));
+        state.scales = [
+          lr / (Math.sqrt(vh0) + eps),
+          lr / (Math.sqrt(vh1) + eps)
+        ];
+        state.theta[0] -= state.scales[0] * mh0;
+        state.theta[1] -= state.scales[1] * mh1;
+      }
+      state.traj.push(state.theta.slice());
+      state.losses.push(lossAt(state.theta));
+      if(state.traj.length > 260) state.traj.shift();
+      if(state.losses.length > 260) state.losses.shift();
+    }
+    step++;
+  }
+
+  function drawTraj(){
+    tctx.drawImage(bg, 0, 0);
+    tctx.fillStyle = '#9aa5c1';
+    tctx.font = '11px monospace';
+    tctx.fillText('sparse-feature regression', 8, 16);
+    for(let i = 0; i < states.length; i++){
+      const state = states[i];
+      tctx.strokeStyle = colors[i];
+      tctx.lineWidth = 1.8;
+      tctx.beginPath();
+      state.traj.forEach(function(p, idx){
+        const x = mapX(p[0]);
+        const y = mapY(p[1]);
+        if(idx === 0) tctx.moveTo(x, y);
+        else tctx.lineTo(x, y);
+      });
+      tctx.stroke();
+      const cur = state.traj[state.traj.length - 1];
+      const x = mapX(cur[0]);
+      const y = mapY(cur[1]);
+      tctx.shadowColor = colors[i];
+      tctx.shadowBlur = 12;
+      tctx.fillStyle = colors[i];
+      tctx.beginPath();
+      tctx.arc(x, y, 5.5, 0, Math.PI * 2);
+      tctx.fill();
+      tctx.shadowBlur = 0;
+    }
+  }
+
+  function drawLosses(){
+    const W = lossCv.width;
+    const H = lossCv.height;
+    const pad = {l:40,r:10,t:18,b:22};
+    lctx.fillStyle = '#080816';
+    lctx.fillRect(0,0,W,H);
+    lctx.fillStyle = '#9aa5c1';
+    lctx.font = '11px monospace';
+    lctx.fillText('full loss', 8, 14);
+
+    const all = states.flatMap(function(s){ return s.losses; });
+    const lo = Math.log(Math.max(1e-6, Math.min.apply(null, all)));
+    const hi = Math.log(Math.max.apply(null, all) + 1e-6);
+    const span = Math.max(0.7, hi - lo);
+
+    lctx.strokeStyle = '#253250';
+    lctx.lineWidth = 1;
+    for(let i = 0; i < 4; i++){
+      const y = pad.t + (H - pad.t - pad.b) * i / 3;
+      lctx.beginPath();
+      lctx.moveTo(pad.l, y);
+      lctx.lineTo(W - pad.r, y);
+      lctx.stroke();
+    }
+    lctx.beginPath();
+    lctx.moveTo(pad.l, pad.t);
+    lctx.lineTo(pad.l, H - pad.b);
+    lctx.lineTo(W - pad.r, H - pad.b);
+    lctx.stroke();
+
+    function px(i, n){
+      return pad.l + (W - pad.l - pad.r) * i / Math.max(1, n - 1);
+    }
+    function py(v){
+      return pad.t + (H - pad.t - pad.b) * (hi - Math.log(v + 1e-6)) / span;
+    }
+
+    for(let i = 0; i < states.length; i++){
+      lctx.strokeStyle = colors[i];
+      lctx.lineWidth = 1.8;
+      lctx.beginPath();
+      states[i].losses.forEach(function(v, idx){
+        if(idx === 0) lctx.moveTo(px(idx, states[i].losses.length), py(v));
+        else lctx.lineTo(px(idx, states[i].losses.length), py(v));
+      });
+      lctx.stroke();
+    }
+    lctx.fillStyle = '#64748b';
+    lctx.fillText('step ' + step, W - 64, H - 6);
+  }
+
+  function drawBars(){
+    const W = barsCv.width;
+    const H = barsCv.height;
+    bctx.fillStyle = '#080816';
+    bctx.fillRect(0, 0, W, H);
+    bctx.fillStyle = '#9aa5c1';
+    bctx.font = '11px monospace';
+    bctx.fillText('effective per-parameter step size', 8, 14);
+    const maxScale = Math.max.apply(null, states.flatMap(function(s){ return s.scales; }).concat([lr]));
+    const left = 72;
+    for(let i = 0; i < states.length; i++){
+      const y = 34 + i * 31;
+      bctx.fillStyle = colors[i];
+      bctx.fillText(labels[i], 8, y + 10);
+      for(let k = 0; k < 2; k++){
+        const w = (W - left - 18) * states[i].scales[k] / maxScale;
+        const by = y + k * 12;
+        bctx.fillStyle = k === 0 ? colors[i] : colors[i] + '99';
+        bctx.fillRect(left, by, w, 8);
+        bctx.fillStyle = '#64748b';
+        bctx.fillText((k === 0 ? 'w1' : 'w2') + ' ' + states[i].scales[k].toFixed(2), left + w + 6, by + 7);
+      }
+    }
+  }
+
+  function draw(){
+    drawTraj();
+    drawLosses();
+    drawBars();
+    document.getElementById('status').textContent = 'step ' + step;
+    const active = data.reduce(function(acc, d){ return acc + d.active; }, 0);
+    const rows = states.map(function(state, i){
+      return '<span style="color:' + colors[i] + '"><b>' + labels[i] + '</b></span>: loss ' +
+        state.losses[state.losses.length - 1].toFixed(4) +
+        ', scales [' + state.scales[0].toFixed(2) + ', ' + state.scales[1].toFixed(2) + ']';
+    }).join('<br>');
+    document.getElementById('info').innerHTML =
+      '<b>Recovered optimum</b>: (' + optimum[0].toFixed(2) + ', ' + optimum[1].toFixed(2) + ')' +
+      ' &nbsp;|&nbsp; <b>sparse activations</b>: ' + (100 * active / data.length).toFixed(1) + '%' +
+      '<br>' + rows +
+      '<br>Feature <b>w1</b> only receives gradients when the sparse input is active. Adagrad permanently increases its relative attention to that coordinate; RMSProp keeps a shorter memory; Adam adds momentum on top of RMS-style scaling.';
+  }
+
+  function loop(ts){
+    if(!running) return;
+    if(lastFrame == null) lastFrame = ts;
+    const want = Math.floor((ts - lastFrame) / 1000 * speed);
+    if(want > 0){
+      const n = Math.min(want, 12);
+      for(let i = 0; i < n; i++) advanceOne();
+      lastFrame = ts;
+      draw();
+    }
+    requestAnimationFrame(loop);
+  }
+
+  function sync(){
+    lr = +document.getElementById('lr').value;
+    sparseProb = +document.getElementById('sparse').value;
+    speed = +document.getElementById('speed').value;
+    document.getElementById('lrv').textContent = lr.toFixed(2);
+    document.getElementById('sv').textContent = sparseProb.toFixed(2);
+    document.getElementById('spv').textContent = speed;
+  }
+
+  document.getElementById('lr').addEventListener('input', function(){ sync(); reset(); });
+  document.getElementById('sparse').addEventListener('input', function(){
+    sync();
+    generateData();
+    reset();
+  });
+  document.getElementById('speed').addEventListener('input', sync);
+  document.getElementById('play').addEventListener('click', function(){
+    running = !running;
+    document.getElementById('play').textContent = running ? 'Pause' : 'Play';
+    if(running){
+      lastFrame = null;
+      requestAnimationFrame(loop);
+    }
+  });
+  document.getElementById('reset').addEventListener('click', reset);
+  document.getElementById('regen').addEventListener('click', function(){
+    generateData();
+    reset();
+  });
+
+  sync();
+  generateData();
+  reset();
+})();
+</script>
