@@ -6,8 +6,15 @@
     <description>Research posts from Anthropic</description>
     <language>en-US</language>
     <generator>numericjungle scrape_rss.py</generator>
-    <lastBuildDate>Fri, 22 May 2026 14:47:55 +0000</lastBuildDate>
+    <lastBuildDate>Fri, 22 May 2026 19:54:53 +0000</lastBuildDate>
     <atom:link href="https://numericjungle.github.io/feeds/anthropic-research.xml" rel="self" type="application/rss+xml"/>
+    <item>
+      <title>2028 Ai Leadership</title>
+      <link>https://www.anthropic.com/research/2028-ai-leadership</link>
+      <guid isPermaLink="true">https://www.anthropic.com/research/2028-ai-leadership</guid>
+      <pubDate>Thu, 14 May 2026 17:06:12 +0000</pubDate>
+      <description>Policy 2028: Two scenarios for global AI leadership May 14, 2026 We’re releasing a new paper that explains our views on the competition on AI between the US and China. It’s essential that the US and its allies stay ahead of authoritarian governments like the Chinese Communist Party, or CCP. AI will soon become powerful enough to be used to repress citizens at unprecedented scale, and even to alter the balance of power among nations . And since AI is advancing more quickly by the day, we have...</description>
+    </item>
     <item>
       <title>Teaching Claude why</title>
       <link>https://www.anthropic.com/research/teaching-claude-why</link>
@@ -216,7 +223,6 @@
       <link>https://www.anthropic.com/research/anthropic-economic-index-january-2026-report</link>
       <guid isPermaLink="true">https://www.anthropic.com/research/anthropic-economic-index-january-2026-report</guid>
       <pubDate>Thu, 15 Jan 2026 10:00:00 +0000</pubDate>
-      <description>Economic Research Anthropic Economic Index report: Economic primitives Jan 15, 2026 Download PDF Introduction How is AI reshaping the economy? This report introduces new metrics of AI usage to provide a rich portrait of interactions with Claude in November 2025, just prior to the release of Opus 4.5. These “primitives”—simple, foundational measures of how Claude is used, which we generate by asking Claude specific questions about anonymized Claude.ai and first-party (1P) API transcripts—cover...</description>
     </item>
     <item>
       <title>Next Generation Constitutional Classifiers</title>
