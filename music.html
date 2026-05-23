@@ -1,0 +1,1518 @@
+---
+layout: page
+title: Music
+description: "A browser piano trainer with scrolling notes and keyboard input."
+permalink: /music/
+hide_title: true
+---
+
+<div class="music-page">
+  <div class="music-stage" id="musicStage" tabindex="0" aria-label="Music practice area">
+    <section class="sheet-panel" aria-label="Scrolling music sheet">
+      <canvas id="musicCanvas" width="1200" height="440"></canvas>
+      <div class="sheet-hud" aria-label="Practice controls">
+        <div class="metric">
+          <span>Score</span>
+          <strong id="scoreValue">0</strong>
+        </div>
+        <div class="metric">
+          <span>Streak</span>
+          <strong id="streakValue">0</strong>
+        </div>
+        <div class="metric wide">
+          <span>Target</span>
+          <strong id="targetValue">C4</strong>
+        </div>
+        <button class="music-btn primary" type="button" id="startButton">
+          <i class="fa fa-play" aria-hidden="true"></i>
+          <span>Start</span>
+        </button>
+        <button class="music-btn" type="button" id="resetButton">
+          <i class="fa fa-repeat" aria-hidden="true"></i>
+          <span>Reset</span>
+        </button>
+        <button class="music-btn listen-toggle" type="button" id="listenButton" aria-pressed="false">
+          <i class="fa fa-volume-up" aria-hidden="true"></i>
+          <span>Listen</span>
+        </button>
+        <label class="music-btn midi-import">
+          <i class="fa fa-upload" aria-hidden="true"></i>
+          <span>Import MIDI</span>
+          <input type="file" id="midiFileInput" accept=".mid,.midi,audio/midi">
+        </label>
+        <a class="music-btn source-link" href="https://www.kunstderfuge.com/bach/organ.htm" target="_blank" rel="noopener">
+          <i class="fa fa-music" aria-hidden="true"></i>
+          <span>Bach MIDIs</span>
+        </a>
+        <select class="track-select" id="midiTrackSelect" aria-label="MIDI track" hidden></select>
+      </div>
+    </section>
+
+    <section class="piano-panel" aria-label="Keyboard piano">
+      <div class="piano-controls">
+        <label class="tempo-control">
+          <span>Tempo</span>
+          <input type="range" id="tempoSlider" min="54" max="132" value="84" step="1">
+          <strong id="tempoValue">84</strong>
+        </label>
+        <label class="instrument-control">
+          <span>Sound</span>
+          <select id="instrumentSelect">
+            <option value="piano">Grand Piano</option>
+            <option value="organ">Church Organ</option>
+          </select>
+        </label>
+        <div class="feedback" id="feedbackText" aria-live="polite">Ready</div>
+      </div>
+      <div class="piano" id="pianoKeys" aria-label="Playable piano keys"></div>
+    </section>
+  </div>
+</div>
+
+<style>
+.music-page {
+  --music-ink: #172033;
+  --music-muted: #667085;
+  --music-paper: #f8fafc;
+  --music-panel: #ffffff;
+  --music-line: #d7dde8;
+  --music-coral: #f26b5b;
+  --music-teal: #1c9a8a;
+  --music-gold: #f2b84b;
+  --music-blue: #3766d6;
+  --music-shadow: rgba(23, 32, 51, 0.14);
+  width: min(1180px, calc(100vw - 14rem));
+  margin-left: calc(50% - 7rem);
+  transform: translateX(-50%);
+}
+
+[data-theme='dark'] .music-page {
+  --music-ink: #e9eef7;
+  --music-muted: #aeb8c7;
+  --music-paper: #242b38;
+  --music-panel: #303847;
+  --music-line: #4f5a6d;
+  --music-coral: #ff806d;
+  --music-teal: #69d0bf;
+  --music-gold: #ffd078;
+  --music-blue: #9db8ff;
+  --music-shadow: rgba(0, 0, 0, 0.28);
+}
+
+.music-stage {
+  height: clamp(560px, calc(100vh - 12rem), 780px);
+  min-height: 560px;
+  display: grid;
+  grid-template-rows: 1fr 1fr;
+  overflow: visible;
+  background: transparent;
+  color: var(--music-ink);
+  outline: none;
+}
+
+.sheet-panel,
+.piano-panel {
+  position: relative;
+  min-height: 0;
+}
+
+.sheet-panel {
+  overflow: hidden;
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.82), rgba(255,255,255,0.28)),
+    repeating-linear-gradient(90deg, rgba(55,102,214,0.06) 0 1px, transparent 1px 72px),
+    var(--music-paper);
+}
+
+[data-theme='dark'] .sheet-panel {
+  background:
+    linear-gradient(180deg, rgba(48,56,71,0.9), rgba(48,56,71,0.35)),
+    repeating-linear-gradient(90deg, rgba(157,184,255,0.08) 0 1px, transparent 1px 72px),
+    var(--music-paper);
+}
+
+#musicCanvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.sheet-hud {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  right: 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  pointer-events: none;
+}
+
+.metric {
+  min-width: 74px;
+  padding: 6px 9px;
+  border: 1px solid color-mix(in srgb, var(--music-line), transparent 8%);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--music-panel), transparent 7%);
+  box-shadow: 0 8px 20px rgba(23, 32, 51, 0.08);
+}
+
+.metric.wide {
+  min-width: 88px;
+}
+
+.metric span,
+.tempo-control span,
+.instrument-control span {
+  display: block;
+  font-size: 0.58rem;
+  line-height: 1;
+  color: var(--music-muted);
+}
+
+.metric strong {
+  display: block;
+  margin-top: 2px;
+  font-size: 0.9rem;
+  line-height: 1.1;
+  color: var(--music-ink);
+}
+
+.music-btn {
+  pointer-events: auto;
+  min-height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border: 1px solid var(--music-line);
+  border-radius: 8px;
+  padding: 0 13px;
+  background: var(--music-panel);
+  color: var(--music-ink);
+  font-size: 0.75rem;
+  line-height: 1;
+}
+
+.midi-import {
+  position: relative;
+}
+
+.midi-import input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.track-select {
+  pointer-events: auto;
+  min-height: 38px;
+  max-width: 170px;
+  border: 1px solid var(--music-line);
+  border-radius: 8px;
+  padding: 0 28px 0 10px;
+  background: var(--music-panel);
+  color: var(--music-ink);
+  font-size: 0.68rem;
+}
+
+.music-btn.primary {
+  border-color: color-mix(in srgb, var(--music-teal), black 8%);
+  background: var(--music-teal);
+  color: #ffffff;
+}
+
+.listen-toggle[aria-pressed='true'] {
+  border-color: color-mix(in srgb, var(--music-gold), black 10%);
+  background: var(--music-gold);
+  color: #172033;
+}
+
+.music-btn:hover,
+.music-btn:focus {
+  border-color: var(--music-blue);
+}
+
+.piano-panel {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  gap: 10px;
+  padding: 14px 0 0;
+  background: transparent;
+}
+
+.piano-controls {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.tempo-control {
+  flex: 1 1 auto;
+  display: grid;
+  grid-template-columns: auto minmax(120px, 1fr) 44px;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+}
+
+.tempo-control input {
+  width: 100%;
+  accent-color: var(--music-teal);
+}
+
+.instrument-control {
+  flex: 0 0 190px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+}
+
+.instrument-control select {
+  width: 100%;
+  min-height: 34px;
+  border: 1px solid var(--music-line);
+  border-radius: 8px;
+  padding: 0 28px 0 10px;
+  background: var(--music-panel);
+  color: var(--music-ink);
+  font-size: 0.7rem;
+}
+
+.tempo-control strong,
+.feedback {
+  font-size: 0.75rem;
+  color: var(--music-ink);
+}
+
+.feedback {
+  min-width: 96px;
+  text-align: right;
+  color: var(--music-muted);
+}
+
+.piano {
+  position: relative;
+  display: flex;
+  min-height: 0;
+  width: 100%;
+  user-select: none;
+  touch-action: none;
+}
+
+.piano-key {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+  border: 1px solid #cfd6e3;
+  cursor: pointer;
+}
+
+.piano-key.white {
+  flex: 1 1 0;
+  height: 100%;
+  min-width: 0;
+  padding-bottom: 14px;
+  border-radius: 0 0 8px 8px;
+  background: linear-gradient(180deg, #ffffff 0%, #f3f6fa 82%, #e6ebf2 100%);
+  color: #253044;
+  z-index: 1;
+}
+
+.piano-key.white + .piano-key.white {
+  margin-left: -1px;
+}
+
+.piano-key.black {
+  position: absolute;
+  top: 0;
+  width: 5.8%;
+  height: 61%;
+  padding-bottom: 10px;
+  border-color: #101826;
+  border-radius: 0 0 6px 6px;
+  background: linear-gradient(180deg, #1c2533 0%, #111827 100%);
+  color: #ffffff;
+  z-index: 3;
+  transform: translateX(-50%);
+}
+
+.piano-key.hit.white,
+.piano-key.white:active {
+  background: linear-gradient(180deg, #dff8ef 0%, #bcebdc 100%);
+  border-color: var(--music-teal);
+}
+
+.piano-key.hit.black,
+.piano-key.black:active {
+  background: linear-gradient(180deg, #3766d6 0%, #223e8e 100%);
+}
+
+.piano-key.expected.white {
+  box-shadow: inset 0 -8px 0 var(--music-gold);
+}
+
+.piano-key.expected.black {
+  box-shadow: inset 0 -6px 0 var(--music-gold);
+}
+
+.key-label {
+  display: grid;
+  gap: 3px;
+  justify-items: center;
+  pointer-events: none;
+  line-height: 1;
+}
+
+.key-label b {
+  font-size: 0.64rem;
+  color: inherit;
+}
+
+.key-label span {
+  font-size: 0.48rem;
+  color: currentColor;
+  opacity: 0.58;
+}
+
+@media (max-width: 760px) {
+  .music-page {
+    width: min(100vw - 1rem, 720px);
+    margin-left: 50%;
+  }
+
+  .music-stage {
+    height: 720px;
+  }
+
+  .sheet-hud {
+    flex-wrap: wrap;
+  }
+
+  .metric {
+    min-width: 62px;
+    padding: 5px 7px;
+  }
+
+  .music-btn {
+    min-height: 34px;
+    padding: 0 10px;
+  }
+
+  .piano-panel {
+    padding: 10px;
+  }
+
+  .piano-controls {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .tempo-control {
+    grid-template-columns: auto minmax(80px, 1fr) 34px;
+  }
+
+  .instrument-control {
+    flex: 1 1 150px;
+  }
+
+  .piano-key.black {
+    width: 7%;
+  }
+
+  .key-label b {
+    font-size: 0.6rem;
+  }
+
+  .key-label span {
+    display: none;
+  }
+}
+</style>
+
+<script>
+(function() {
+  const stage = document.getElementById('musicStage');
+  const canvas = document.getElementById('musicCanvas');
+  const ctx = canvas.getContext('2d');
+  const piano = document.getElementById('pianoKeys');
+  const startButton = document.getElementById('startButton');
+  const resetButton = document.getElementById('resetButton');
+  const listenButton = document.getElementById('listenButton');
+  const midiFileInput = document.getElementById('midiFileInput');
+  const midiTrackSelect = document.getElementById('midiTrackSelect');
+  const tempoSlider = document.getElementById('tempoSlider');
+  const instrumentSelect = document.getElementById('instrumentSelect');
+  const tempoValue = document.getElementById('tempoValue');
+  const scoreValue = document.getElementById('scoreValue');
+  const streakValue = document.getElementById('streakValue');
+  const targetValue = document.getElementById('targetValue');
+  const feedbackText = document.getElementById('feedbackText');
+
+  const whiteBindings = [
+    { note: 'C3', key: 'Z', code: 'KeyZ' },
+    { note: 'D3', key: 'X', code: 'KeyX' },
+    { note: 'E3', key: 'C', code: 'KeyC' },
+    { note: 'F3', key: 'V', code: 'KeyV' },
+    { note: 'G3', key: 'B', code: 'KeyB' },
+    { note: 'A3', key: 'N', code: 'KeyN' },
+    { note: 'B3', key: 'M', code: 'KeyM' },
+    { note: 'C4', key: 'Q', code: 'KeyQ' },
+    { note: 'D4', key: 'W', code: 'KeyW' },
+    { note: 'E4', key: 'E', code: 'KeyE' },
+    { note: 'F4', key: 'R', code: 'KeyR' },
+    { note: 'G4', key: 'T', code: 'KeyT' },
+    { note: 'A4', key: 'Y', code: 'KeyY' },
+    { note: 'B4', key: 'U', code: 'KeyU' },
+    { note: 'C5', key: 'I', code: 'KeyI' },
+    { note: 'D5', key: 'O', code: 'KeyO' },
+    { note: 'E5', key: 'P', code: 'KeyP' },
+    { note: 'F5', key: '[', code: 'BracketLeft' },
+    { note: 'G5', key: ']', code: 'BracketRight' },
+    { note: 'A5', key: '\\', code: 'Backslash' },
+    { note: 'B5', key: 'A', code: 'KeyA' }
+  ];
+  const whiteNotes = whiteBindings.map(item => item.note);
+  const blackNotes = [
+    { note: 'C#3', after: 0, key: 'S', code: 'KeyS' },
+    { note: 'D#3', after: 1, key: 'D', code: 'KeyD' },
+    { note: 'F#3', after: 3, key: 'G', code: 'KeyG' },
+    { note: 'G#3', after: 4, key: 'H', code: 'KeyH' },
+    { note: 'A#3', after: 5, key: 'J', code: 'KeyJ' },
+    { note: 'C#4', after: 7, key: '2', code: 'Digit2' },
+    { note: 'D#4', after: 8, key: '3', code: 'Digit3' },
+    { note: 'F#4', after: 10, key: '5', code: 'Digit5' },
+    { note: 'G#4', after: 11, key: '6', code: 'Digit6' },
+    { note: 'A#4', after: 12, key: '7', code: 'Digit7' },
+    { note: 'C#5', after: 14, key: '9', code: 'Digit9' },
+    { note: 'D#5', after: 15, key: '0', code: 'Digit0' },
+    { note: 'F#5', after: 17, key: '=', code: 'Equal' },
+    { note: 'G#5', after: 18, key: ';', code: 'Semicolon' },
+    { note: 'A#5', after: 19, key: "'", code: 'Quote' }
+  ];
+  const noteToKey = {};
+  const keyToNote = {};
+  const codeToNote = {};
+  const keyElements = {};
+  const activePointers = new Map();
+
+  whiteBindings.forEach(item => {
+    noteToKey[item.note] = item.key;
+    keyToNote[item.key.toLowerCase()] = item.note;
+    codeToNote[item.code] = item.note;
+  });
+  blackNotes.forEach(item => {
+    noteToKey[item.note] = item.key;
+    keyToNote[item.key.toLowerCase()] = item.note;
+    codeToNote[item.code] = item.note;
+  });
+
+  const midiBase = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
+  const melody = [
+    ['E4', 0], ['E4', 1], ['F4', 2], ['G4', 3],
+    ['G4', 4], ['F4', 5], ['E4', 6], ['D4', 7],
+    ['C4', 8], ['C4', 9], ['D4', 10], ['E4', 11],
+    ['E4', 12], ['D4', 13], ['D4', 14.5],
+    ['E4', 16], ['E4', 17], ['F4', 18], ['G4', 19],
+    ['G4', 20], ['F4', 21], ['E4', 22], ['D4', 23],
+    ['C4', 24], ['C4', 25], ['D4', 26], ['E4', 27],
+    ['D4', 28], ['C4', 29], ['C4', 30.5],
+    ['D4', 32], ['D4', 33], ['E4', 34], ['C4', 35],
+    ['D4', 36], ['E4', 37], ['F4', 38], ['E4', 39],
+    ['C4', 40], ['D4', 41], ['E4', 42], ['F4', 43],
+    ['E4', 44], ['D4', 45], ['C4', 46]
+  ];
+
+  let lessonTemplate = melody.map((entry, index) => ({
+    note: entry[0],
+    beat: entry[1],
+    id: index
+  }));
+  let midiTrackLessons = [];
+  let midiTempo = null;
+  let notes;
+  let audioContext;
+  const pianoSampleBaseUrl = 'https://tonejs.github.io/audio/salamander/';
+  const pianoSampleAnchors = ['C3', 'D#3', 'F#3', 'A3', 'C4', 'D#4', 'F#4', 'A4', 'C5', 'D#5', 'F#5', 'A5', 'C6'];
+  const pianoSampleCache = {};
+  const pianoSamplePromises = {};
+  let pianoSamplesLoading = false;
+  let running = false;
+  let listeningMode = false;
+  let tempo = Number(tempoSlider.value);
+  let instrument = instrumentSelect.value;
+  let startTime = 0;
+  let offsetBeat = 0;
+  let score = 0;
+  let streak = 0;
+  let animationId = 0;
+  let lastFeedbackAt = 0;
+
+  function noteVisualDuration(template, index) {
+    const next = template[index + 1];
+    const gap = next ? Math.max(0.25, next.beat - template[index].beat) : 1;
+    if (gap >= 1.75) return 'half';
+    if (gap >= 0.75) return 'quarter';
+    if (gap >= 0.38) return 'eighth';
+    return 'sixteenth';
+  }
+
+  function durationBeats(duration) {
+    if (typeof duration === 'number') return duration;
+    if (duration === 'whole') return 4;
+    if (duration === 'half') return 2;
+    if (duration === 'quarter') return 1;
+    if (duration === 'eighth') return 0.5;
+    if (duration === 'sixteenth') return 0.25;
+    return 1;
+  }
+
+  function durationSeconds(duration) {
+    return Math.max(0.12, durationBeats(duration) * 60 / tempo);
+  }
+
+  function listeningTriggerBeat(pixelsPerBeat) {
+    const noteheadCenterOffsetPx = 12;
+    return noteheadCenterOffsetPx / pixelsPerBeat;
+  }
+
+  function makeNotes() {
+    return lessonTemplate.map((item, index) => ({
+      note: item.note,
+      beat: item.beat,
+      id: item.id,
+      duration: item.duration || noteVisualDuration(lessonTemplate, index),
+      listened: false,
+      hit: false,
+      missed: false,
+      feedback: ''
+    }));
+  }
+
+  function noteToMidi(note) {
+    const match = /^([A-G])(#?)(\d)$/.exec(note);
+    if (!match) return 60;
+    const pitch = midiBase[match[1]] + (match[2] ? 1 : 0);
+    const octave = Number(match[3]);
+    return (octave + 1) * 12 + pitch;
+  }
+
+  function diatonicNumber(note) {
+    const letterIndex = { C: 0, D: 1, E: 2, F: 3, G: 4, A: 5, B: 6 };
+    const match = /^([A-G])#?(\d)$/.exec(note);
+    if (!match) return diatonicNumber('B4');
+    return Number(match[2]) * 7 + letterIndex[match[1]];
+  }
+
+  function midiToNoteName(midi) {
+    const pitchNames = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+    return pitchNames[((midi % 12) + 12) % 12] + (Math.floor(midi / 12) - 1);
+  }
+
+  function noteFrequency(note) {
+    const concertA = 440;
+    return concertA * Math.pow(2, (noteToMidi(note) - 69) / 12);
+  }
+
+  function sampleFileName(note) {
+    return note.replace('#', 's') + '.mp3';
+  }
+
+  function nearestPianoSample(note) {
+    const targetMidi = noteToMidi(note);
+    return pianoSampleAnchors.reduce((best, anchor) => {
+      const distance = Math.abs(noteToMidi(anchor) - targetMidi);
+      return distance < best.distance ? { note: anchor, distance } : best;
+    }, { note: pianoSampleAnchors[0], distance: Infinity }).note;
+  }
+
+  function clamp(value, min, max) {
+    return Math.min(max, Math.max(min, value));
+  }
+
+  function ensureAudio() {
+    if (!audioContext) {
+      const AudioCtor = window.AudioContext || window.webkitAudioContext;
+      audioContext = new AudioCtor();
+    }
+    if (audioContext.state === 'suspended') {
+      audioContext.resume();
+    }
+  }
+
+  function loadPianoSample(note) {
+    if (pianoSampleCache[note]) {
+      return Promise.resolve(pianoSampleCache[note]);
+    }
+    if (!pianoSamplePromises[note]) {
+      pianoSamplePromises[note] = fetch(pianoSampleBaseUrl + sampleFileName(note))
+        .then(response => {
+          if (!response.ok) {
+            throw new Error('Piano sample failed: ' + note);
+          }
+          return response.arrayBuffer();
+        })
+        .then(buffer => audioContext.decodeAudioData(buffer))
+        .then(decoded => {
+          pianoSampleCache[note] = decoded;
+          return decoded;
+        })
+        .catch(error => {
+          window.console.warn(error);
+          delete pianoSamplePromises[note];
+          return null;
+        });
+    }
+    return pianoSamplePromises[note];
+  }
+
+  function warmPianoSamples() {
+    ensureAudio();
+    if (pianoSamplesLoading) return;
+    pianoSamplesLoading = true;
+    pianoSampleAnchors.forEach(loadPianoSample);
+  }
+
+  function makePartials(frequency, partials, now, duration) {
+    partials.forEach(partial => {
+      const osc = audioContext.createOscillator();
+      const gain = audioContext.createGain();
+      const attack = partial.attack || 0.008;
+      const decay = partial.decay || duration;
+      osc.type = partial.type || 'sine';
+      osc.frequency.setValueAtTime(frequency * partial.ratio, now);
+      gain.gain.setValueAtTime(0.0001, now);
+      gain.gain.exponentialRampToValueAtTime(partial.amp, now + attack);
+      gain.gain.exponentialRampToValueAtTime(Math.max(partial.amp * (partial.sustain || 0.08), 0.0001), now + Math.min(decay * 0.35, 0.18));
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + decay);
+      osc.connect(gain);
+      gain.connect(audioContext.destination);
+      osc.start(now);
+      osc.stop(now + decay + 0.06);
+    });
+  }
+
+  function playPianoSynthNote(frequency, now, lengthSeconds) {
+    const scale = Math.max(0.28, lengthSeconds / 1.0);
+    makePartials(frequency, [
+      { ratio: 1, amp: 0.30, decay: Math.min(2.4, 1.0 * scale), sustain: 0.12 },
+      { ratio: 2, amp: 0.15, decay: Math.min(1.8, 0.72 * scale), sustain: 0.08 },
+      { ratio: 3, amp: 0.09, decay: Math.min(1.3, 0.52 * scale), sustain: 0.04 },
+      { ratio: 4, amp: 0.045, decay: Math.min(0.95, 0.36 * scale), sustain: 0.025 },
+      { ratio: 5, amp: 0.026, decay: Math.min(0.7, 0.27 * scale), sustain: 0.015 },
+      { ratio: 7, amp: 0.014, decay: Math.min(0.5, 0.2 * scale), sustain: 0.012 }
+    ], now, lengthSeconds);
+  }
+
+  function playSampledPianoNote(note, now, lengthSeconds) {
+    const sampleNote = nearestPianoSample(note);
+    const sample = pianoSampleCache[sampleNote];
+    if (!sample) {
+      loadPianoSample(sampleNote);
+      return false;
+    }
+
+    const source = audioContext.createBufferSource();
+    const gain = audioContext.createGain();
+    const release = Math.min(0.55, Math.max(0.16, lengthSeconds * 0.35));
+    source.buffer = sample;
+    source.playbackRate.setValueAtTime(noteFrequency(note) / noteFrequency(sampleNote), now);
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.exponentialRampToValueAtTime(0.92, now + 0.006);
+    gain.gain.setValueAtTime(0.86, now + Math.max(0.01, lengthSeconds - release));
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + lengthSeconds + release);
+    source.connect(gain);
+    gain.connect(audioContext.destination);
+    source.start(now);
+    source.stop(now + lengthSeconds + release + 0.08);
+    return true;
+  }
+
+  function playOrganNote(frequency, now, lengthSeconds) {
+    makePartials(frequency, [
+      { ratio: 1, amp: 0.18, attack: 0.035, decay: lengthSeconds, sustain: 0.82 },
+      { ratio: 2, amp: 0.13, attack: 0.04, decay: lengthSeconds, sustain: 0.86 },
+      { ratio: 3, amp: 0.075, attack: 0.045, decay: lengthSeconds, sustain: 0.74 },
+      { ratio: 4, amp: 0.055, attack: 0.05, decay: lengthSeconds, sustain: 0.7 },
+      { ratio: 6, amp: 0.032, attack: 0.055, decay: lengthSeconds, sustain: 0.62 },
+      { ratio: 8, amp: 0.022, attack: 0.06, decay: lengthSeconds, sustain: 0.58 }
+    ], now, lengthSeconds);
+  }
+
+  function playNote(note, duration) {
+    ensureAudio();
+    const now = audioContext.currentTime;
+    const frequency = noteFrequency(note);
+    const lengthSeconds = durationSeconds(duration || 'quarter');
+    if (instrument === 'organ') {
+      playOrganNote(frequency, now, lengthSeconds);
+      return;
+    }
+    if (!playSampledPianoNote(note, now, lengthSeconds)) {
+      playPianoSynthNote(frequency, now, lengthSeconds);
+    }
+  }
+
+  function readMidiText(view, offset, length) {
+    let out = '';
+    for (let i = 0; i < length; i += 1) {
+      out += String.fromCharCode(view.getUint8(offset + i));
+    }
+    return out;
+  }
+
+  function parseMidiFile(arrayBuffer) {
+    const view = new DataView(arrayBuffer);
+    let pos = 0;
+
+    function requireBytes(count) {
+      if (pos + count > view.byteLength) {
+        throw new Error('Unexpected end of MIDI file');
+      }
+    }
+
+    function readUint16() {
+      requireBytes(2);
+      const value = view.getUint16(pos);
+      pos += 2;
+      return value;
+    }
+
+    function readUint32() {
+      requireBytes(4);
+      const value = view.getUint32(pos);
+      pos += 4;
+      return value;
+    }
+
+    function readChunkId() {
+      requireBytes(4);
+      const value = readMidiText(view, pos, 4);
+      pos += 4;
+      return value;
+    }
+
+    function readVarLen() {
+      let value = 0;
+      let byte = 0;
+      do {
+        requireBytes(1);
+        byte = view.getUint8(pos);
+        pos += 1;
+        value = (value << 7) | (byte & 0x7f);
+      } while (byte & 0x80);
+      return value;
+    }
+
+    if (readChunkId() !== 'MThd') {
+      throw new Error('Not a Standard MIDI file');
+    }
+    const headerLength = readUint32();
+    const headerEnd = pos + headerLength;
+    const format = readUint16();
+    const trackCount = readUint16();
+    const division = readUint16();
+    pos = headerEnd;
+
+    if (division & 0x8000) {
+      throw new Error('SMPTE-time MIDI files are not supported yet');
+    }
+
+    const ticksPerBeat = division;
+    const tracks = [];
+    let firstTempoBpm = null;
+
+    for (let trackIndex = 0; trackIndex < trackCount; trackIndex += 1) {
+      const chunkId = readChunkId();
+      const chunkLength = readUint32();
+      const trackEnd = pos + chunkLength;
+      if (chunkId !== 'MTrk') {
+        pos = trackEnd;
+        continue;
+      }
+
+      let tick = 0;
+      let runningStatus = 0;
+      let trackName = '';
+      const trackNotes = [];
+
+      while (pos < trackEnd) {
+        tick += readVarLen();
+        requireBytes(1);
+        let status = view.getUint8(pos);
+        pos += 1;
+
+        if (status < 0x80) {
+          if (!runningStatus) {
+            throw new Error('MIDI running status without previous status');
+          }
+          pos -= 1;
+          status = runningStatus;
+        } else if (status < 0xf0) {
+          runningStatus = status;
+        }
+
+        if (status === 0xff) {
+          const metaType = view.getUint8(pos);
+          pos += 1;
+          const length = readVarLen();
+          if (metaType === 0x03 && length > 0) {
+            trackName = readMidiText(view, pos, length).trim();
+          } else if (metaType === 0x51 && length === 3 && firstTempoBpm === null) {
+            const microsPerBeat = (view.getUint8(pos) << 16) | (view.getUint8(pos + 1) << 8) | view.getUint8(pos + 2);
+            firstTempoBpm = Math.round(60000000 / microsPerBeat);
+          }
+          pos += length;
+        } else if (status === 0xf0 || status === 0xf7) {
+          pos += readVarLen();
+        } else {
+          const eventType = status & 0xf0;
+          const channel = status & 0x0f;
+          const data1 = view.getUint8(pos);
+          pos += 1;
+          let data2 = 0;
+          if (eventType !== 0xc0 && eventType !== 0xd0) {
+            data2 = view.getUint8(pos);
+            pos += 1;
+          }
+
+          if (eventType === 0x90 && data2 > 0 && channel !== 9) {
+            trackNotes.push({
+              beat: tick / ticksPerBeat,
+              midi: data1,
+              velocity: data2,
+              channel
+            });
+          }
+        }
+      }
+
+      tracks.push({
+        name: trackName || 'Track ' + (trackIndex + 1),
+        notes: trackNotes.sort((a, b) => a.beat - b.beat || a.midi - b.midi),
+        format
+      });
+      pos = trackEnd;
+    }
+
+    return {
+      bpm: firstTempoBpm,
+      tracks: tracks.filter(track => track.notes.length > 0)
+    };
+  }
+
+  function fitMidiToPianoRange(events) {
+    const minMidi = noteToMidi(whiteNotes[0]);
+    const maxMidi = noteToMidi(whiteNotes[whiteNotes.length - 1]);
+    const alreadyPlayable = events.every(event => event.midi >= minMidi && event.midi <= maxMidi);
+    if (alreadyPlayable) {
+      const sorted = events.slice().sort((a, b) => a.beat - b.beat || a.midi - b.midi);
+      const firstBeat = sorted[0].beat;
+      return sorted.map((event, index) => ({
+        note: midiToNoteName(event.midi),
+        beat: event.beat - firstBeat + 2,
+        id: index
+      }));
+    }
+
+    let bestShift = 0;
+    let bestScore = -Infinity;
+
+    for (let shift = -48; shift <= 48; shift += 12) {
+      let inside = 0;
+      let distance = 0;
+      events.forEach(event => {
+        const midi = event.midi + shift;
+        if (midi >= minMidi && midi <= maxMidi) {
+          inside += 1;
+        }
+        const center = (minMidi + maxMidi) / 2;
+        distance += Math.abs(midi - center);
+      });
+      const score = inside * 1000 - distance / Math.max(events.length, 1) - Math.abs(shift) * 0.25;
+      if (score > bestScore) {
+        bestScore = score;
+        bestShift = shift;
+      }
+    }
+
+    const shifted = events
+      .map(event => ({ beat: event.beat, midi: event.midi + bestShift }))
+      .filter(event => event.midi >= minMidi && event.midi <= maxMidi)
+      .sort((a, b) => a.beat - b.beat || a.midi - b.midi);
+
+    if (!shifted.length) return [];
+    const firstBeat = shifted[0].beat;
+    return shifted.map((event, index) => ({
+      note: midiToNoteName(event.midi),
+      beat: event.beat - firstBeat + 2,
+      id: index
+    }));
+  }
+
+  function loadLessonFromMidiEvents(events, label) {
+    const converted = fitMidiToPianoRange(events);
+    if (!converted.length) {
+      setFeedback('No playable notes');
+      return;
+    }
+    lessonTemplate = converted;
+    if (midiTempo) {
+      tempo = clamp(midiTempo, Number(tempoSlider.min), Number(tempoSlider.max));
+      tempoSlider.value = String(tempo);
+      tempoValue.textContent = String(tempo);
+    }
+    resetPractice();
+    setFeedback(label);
+  }
+
+  function populateMidiTracks(parsed) {
+    midiTrackLessons = parsed.tracks;
+    midiTempo = parsed.bpm;
+    midiTrackSelect.innerHTML = '';
+
+    const allNotes = parsed.tracks.flatMap(track => track.notes);
+    const allOption = document.createElement('option');
+    allOption.value = '-1';
+    allOption.textContent = 'All notes';
+    midiTrackSelect.appendChild(allOption);
+
+    parsed.tracks.forEach((track, index) => {
+      const option = document.createElement('option');
+      option.value = String(index);
+      option.textContent = track.name + ' (' + track.notes.length + ')';
+      midiTrackSelect.appendChild(option);
+    });
+
+    midiTrackSelect.hidden = parsed.tracks.length <= 1;
+    midiTrackSelect.value = parsed.tracks.length === 1 ? '0' : '-1';
+    loadLessonFromMidiEvents(parsed.tracks.length === 1 ? parsed.tracks[0].notes : allNotes, 'MIDI loaded');
+  }
+
+  function buildPiano() {
+    const whiteWidth = 100 / whiteNotes.length;
+    whiteNotes.forEach((note, index) => {
+      const key = document.createElement('button');
+      key.className = 'piano-key white';
+      key.type = 'button';
+      key.dataset.note = note;
+      key.innerHTML = '<span class="key-label"><b>' + noteToKey[note] + '</b><span>' + note + '</span></span>';
+      key.addEventListener('pointerdown', event => {
+        event.preventDefault();
+        key.setPointerCapture(event.pointerId);
+        activePointers.set(event.pointerId, note);
+        triggerNote(note);
+      });
+      key.addEventListener('pointerup', event => {
+        activePointers.delete(event.pointerId);
+      });
+      key.addEventListener('pointercancel', event => {
+        activePointers.delete(event.pointerId);
+      });
+      piano.appendChild(key);
+      keyElements[note] = key;
+      if (index === 0) {
+        key.style.borderTopLeftRadius = '8px';
+      }
+      if (index === whiteNotes.length - 1) {
+        key.style.borderTopRightRadius = '8px';
+      }
+    });
+
+    blackNotes.forEach(item => {
+      const key = document.createElement('button');
+      key.className = 'piano-key black';
+      key.type = 'button';
+      key.dataset.note = item.note;
+      key.style.width = (whiteWidth * 0.66) + '%';
+      key.style.left = ((item.after + 1) * whiteWidth) + '%';
+      key.innerHTML = '<span class="key-label"><b>' + item.key + '</b><span>' + item.note + '</span></span>';
+      key.addEventListener('pointerdown', event => {
+        event.preventDefault();
+        key.setPointerCapture(event.pointerId);
+        activePointers.set(event.pointerId, item.note);
+        triggerNote(item.note);
+      });
+      key.addEventListener('pointerup', event => {
+        activePointers.delete(event.pointerId);
+      });
+      key.addEventListener('pointercancel', event => {
+        activePointers.delete(event.pointerId);
+      });
+      piano.appendChild(key);
+      keyElements[item.note] = key;
+    });
+  }
+
+  function currentBeat(now) {
+    if (!running) return offsetBeat;
+    return offsetBeat + ((now || performance.now()) - startTime) / 1000 * tempo / 60;
+  }
+
+  function nearestPending(beat, noteName) {
+    let best = null;
+    let bestDistance = Infinity;
+    notes.forEach(item => {
+      if (item.hit || item.missed || item.note !== noteName) return;
+      const distance = Math.abs(item.beat - beat);
+      if (distance < bestDistance) {
+        best = item;
+        bestDistance = distance;
+      }
+    });
+    return { item: best, distance: bestDistance };
+  }
+
+  function triggerNote(noteName) {
+    stage.focus({ preventScroll: true });
+    playNote(noteName);
+    flashKey(noteName, 'hit');
+
+    if (!running) {
+      setFeedback(noteName);
+      return;
+    }
+
+    const beat = currentBeat();
+    const match = nearestPending(beat, noteName);
+    const hitWindow = Math.max(0.22, tempo / 250);
+    if (match.item && match.distance <= hitWindow) {
+      match.item.hit = true;
+      const points = match.distance <= hitWindow * 0.34 ? 100 : match.distance <= hitWindow * 0.67 ? 70 : 40;
+      score += points;
+      streak += 1;
+      match.item.feedback = points === 100 ? 'Perfect' : points === 70 ? 'Good' : 'Late';
+      setFeedback(match.item.feedback);
+    } else {
+      streak = 0;
+      setFeedback(noteName);
+    }
+    updateMetrics();
+  }
+
+  function flashKey(noteName, className) {
+    const key = keyElements[noteName];
+    if (!key) return;
+    key.classList.add(className);
+    window.setTimeout(() => key.classList.remove(className), 130);
+  }
+
+  function setFeedback(text) {
+    feedbackText.textContent = text;
+    lastFeedbackAt = performance.now();
+  }
+
+  function updateMetrics() {
+    scoreValue.textContent = String(score);
+    streakValue.textContent = String(streak);
+    const next = nextTarget(currentBeat());
+    targetValue.textContent = next ? next.note + ' / ' + noteToKey[next.note] : 'Done';
+    Object.keys(keyElements).forEach(note => {
+      keyElements[note].classList.toggle('expected', Boolean(next && next.note === note));
+    });
+  }
+
+  function nextTarget(beat) {
+    for (let i = 0; i < notes.length; i += 1) {
+      if (!notes[i].hit && !notes[i].missed && notes[i].beat >= beat - 0.35) {
+        return notes[i];
+      }
+    }
+    return null;
+  }
+
+  function startPractice() {
+    ensureAudio();
+    stage.focus({ preventScroll: true });
+    if (running) {
+      offsetBeat = currentBeat();
+      running = false;
+      startButton.innerHTML = '<i class="fa fa-play" aria-hidden="true"></i><span>Start</span>';
+      setFeedback('Paused');
+      return;
+    }
+    running = true;
+    startTime = performance.now();
+    startButton.innerHTML = '<i class="fa fa-pause" aria-hidden="true"></i><span>Pause</span>';
+    setFeedback('Playing');
+  }
+
+  function resetPractice() {
+    running = false;
+    notes = makeNotes();
+    offsetBeat = 0;
+    score = 0;
+    streak = 0;
+    startButton.innerHTML = '<i class="fa fa-play" aria-hidden="true"></i><span>Start</span>';
+    setFeedback('Ready');
+    updateMetrics();
+    draw(performance.now());
+  }
+
+  function resizeCanvas() {
+    const ratio = window.devicePixelRatio || 1;
+    const rect = canvas.getBoundingClientRect();
+    const width = Math.max(1, Math.floor(rect.width * ratio));
+    const height = Math.max(1, Math.floor(rect.height * ratio));
+    if (canvas.width !== width || canvas.height !== height) {
+      canvas.width = width;
+      canvas.height = height;
+    }
+    ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+  }
+
+  function cssVar(name) {
+    return getComputedStyle(document.querySelector('.music-page')).getPropertyValue(name).trim();
+  }
+
+  function drawMusicNote(x, y, duration, color, strokeColor, labelColor, label, stemUp) {
+    const filled = duration !== 'half' && duration !== 'whole';
+    const stem = duration !== 'whole';
+    const flags = duration === 'sixteenth' ? 2 : duration === 'eighth' ? 1 : 0;
+    const headW = 25;
+    const headH = 17;
+    const stemHeight = 48;
+    const stemX = x + (stemUp ? 10 : -10);
+    const stemEnd = y + (stemUp ? -stemHeight : stemHeight);
+
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(-0.22);
+    ctx.beginPath();
+    ctx.ellipse(0, 0, headW / 2, headH / 2, 0, 0, Math.PI * 2);
+    if (filled) {
+      ctx.fillStyle = color;
+      ctx.fill();
+    } else {
+      ctx.fillStyle = cssVar('--music-paper');
+      ctx.fill();
+    }
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = strokeColor;
+    ctx.stroke();
+    ctx.restore();
+
+    if (stem) {
+      ctx.strokeStyle = strokeColor;
+      ctx.lineWidth = 3;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(stemX, y + (stemUp ? -2 : 2));
+      ctx.lineTo(stemX, stemEnd);
+      ctx.stroke();
+
+      for (let i = 0; i < flags; i += 1) {
+        const fy = stemEnd + (stemUp ? i * 12 : -i * 12);
+        ctx.beginPath();
+        ctx.moveTo(stemX, fy);
+        if (stemUp) {
+          ctx.bezierCurveTo(stemX + 22, fy + 8, stemX + 22, fy + 27, stemX + 4, fy + 33);
+        } else {
+          ctx.bezierCurveTo(stemX - 22, fy - 8, stemX - 22, fy - 27, stemX - 4, fy - 33);
+        }
+        ctx.lineWidth = 3;
+        ctx.stroke();
+      }
+    }
+
+    ctx.fillStyle = labelColor;
+    ctx.font = '700 10px system-ui, -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(label, x, y);
+    ctx.textAlign = 'start';
+    ctx.textBaseline = 'alphabetic';
+  }
+
+  const trebleStaffConfig = {
+    clef: 'G',
+    anchor: 'B4',
+    bottomLine: 'E4',
+    topLine: 'F5'
+  };
+  const bassStaffConfig = {
+    clef: 'F',
+    anchor: 'D3',
+    bottomLine: 'G2',
+    topLine: 'A3'
+  };
+  const beatsPerMeasure = 4;
+  const visibleMeasureCount = 4;
+  const visibleBeatCount = beatsPerMeasure * visibleMeasureCount;
+
+  function staffForNote(note) {
+    return noteToMidi(note) < noteToMidi('C4') ? bassStaffConfig : trebleStaffConfig;
+  }
+
+  function staffY(note, config, middleY, stepY) {
+    return middleY - (diatonicNumber(note) - diatonicNumber(config.anchor)) * stepY;
+  }
+
+  function drawLedgerLines(x, note, config, middleY, stepY, strokeColor) {
+    const noteNumber = diatonicNumber(note);
+    const bottomNumber = diatonicNumber(config.bottomLine);
+    const topNumber = diatonicNumber(config.topLine);
+    ctx.strokeStyle = strokeColor;
+    ctx.lineWidth = 2;
+
+    if (noteNumber < bottomNumber) {
+      for (let n = bottomNumber - 2; n >= noteNumber; n -= 2) {
+        const y = middleY - (n - diatonicNumber(config.anchor)) * stepY;
+        ctx.beginPath();
+        ctx.moveTo(x - 24, y);
+        ctx.lineTo(x + 24, y);
+        ctx.stroke();
+      }
+    } else if (noteNumber > topNumber) {
+      for (let n = topNumber + 2; n <= noteNumber; n += 2) {
+        const y = middleY - (n - diatonicNumber(config.anchor)) * stepY;
+        ctx.beginPath();
+        ctx.moveTo(x - 24, y);
+        ctx.lineTo(x + 24, y);
+        ctx.stroke();
+      }
+    }
+  }
+
+  function drawStaff(staffEndX, staffTop, lineSpacing, lineColor, mutedColor, clefLabel) {
+    const staffStartX = 54;
+    ctx.strokeStyle = lineColor;
+    ctx.lineWidth = 2;
+    for (let i = 0; i < 5; i += 1) {
+      const y = staffTop + i * lineSpacing;
+      ctx.beginPath();
+      ctx.moveTo(staffStartX, y);
+      ctx.lineTo(staffEndX, y);
+      ctx.stroke();
+    }
+
+    ctx.fillStyle = mutedColor;
+    ctx.font = '700 42px Georgia, serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(clefLabel, 30, staffTop + lineSpacing * 2);
+    ctx.textAlign = 'start';
+    ctx.textBaseline = 'alphabetic';
+  }
+
+  function drawMeasureBarlines(staffEndX, trebleTop, bassTop, lineSpacing, mutedColor, lineColor, targetX, beat, pixelsPerBeat) {
+    const firstMeasureBeat = Math.ceil((beat - 0.001) / beatsPerMeasure) * beatsPerMeasure;
+    const barBottom = bassTop + lineSpacing * 4;
+    ctx.lineCap = 'butt';
+
+    for (let barBeat = firstMeasureBeat; barBeat <= beat + visibleBeatCount + beatsPerMeasure; barBeat += beatsPerMeasure) {
+      const barX = targetX + (barBeat - beat) * pixelsPerBeat;
+      if (barX < 54 || barX > staffEndX + 1) continue;
+      const isFinalBar = Math.abs(barX - staffEndX) < 2;
+      ctx.strokeStyle = isFinalBar ? lineColor : mutedColor;
+      ctx.lineWidth = isFinalBar ? 2.6 : 1.4;
+      ctx.beginPath();
+      ctx.moveTo(barX, trebleTop);
+      ctx.lineTo(barX, barBottom);
+      ctx.stroke();
+
+      if (isFinalBar) {
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        ctx.moveTo(barX - 5, trebleTop);
+        ctx.lineTo(barX - 5, barBottom);
+        ctx.stroke();
+      }
+    }
+  }
+
+  function drawGrandStaff(staffEndX, trebleTop, bassTop, lineSpacing, lineColor, mutedColor, targetX, beat, pixelsPerBeat) {
+    drawStaff(staffEndX, trebleTop, lineSpacing, lineColor, mutedColor, trebleStaffConfig.clef);
+    drawStaff(staffEndX, bassTop, lineSpacing, lineColor, mutedColor, bassStaffConfig.clef);
+    drawMeasureBarlines(staffEndX, trebleTop, bassTop, lineSpacing, mutedColor, lineColor, targetX, beat, pixelsPerBeat);
+
+    ctx.strokeStyle = lineColor;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(54, trebleTop);
+    ctx.lineTo(54, bassTop + lineSpacing * 4);
+    ctx.stroke();
+  }
+
+  function draw(now) {
+    resizeCanvas();
+    const width = canvas.clientWidth;
+    const height = canvas.clientHeight;
+    const beat = currentBeat(now);
+    const targetX = Math.max(118, width * 0.16);
+    const scoreRightX = width - Math.max(28, width * 0.025);
+    const pixelsPerBeat = Math.max(1, (scoreRightX - targetX) / visibleBeatCount);
+    const lineSpacing = Math.max(13, Math.min(21, height * 0.045));
+    const stepY = lineSpacing / 2;
+    const staffGap = Math.max(42, lineSpacing * 3);
+    const grandStaffHeight = lineSpacing * 8 + staffGap;
+    const trebleTop = Math.max(92, (height - grandStaffHeight) / 2 + Math.min(40, height * 0.1));
+    const trebleMiddleY = trebleTop + lineSpacing * 2;
+    const bassTop = trebleTop + lineSpacing * 4 + staffGap;
+    const bassMiddleY = bassTop + lineSpacing * 2;
+    const bassBottom = bassTop + lineSpacing * 4;
+    const ink = cssVar('--music-ink');
+    const muted = cssVar('--music-muted');
+    const line = cssVar('--music-line');
+    const coral = cssVar('--music-coral');
+    const teal = cssVar('--music-teal');
+    const gold = cssVar('--music-gold');
+    const blue = cssVar('--music-blue');
+
+    ctx.clearRect(0, 0, width, height);
+    ctx.fillStyle = cssVar('--music-paper');
+    ctx.fillRect(0, 0, width, height);
+
+    drawGrandStaff(scoreRightX, trebleTop, bassTop, lineSpacing, line, muted, targetX, beat, pixelsPerBeat);
+
+    ctx.strokeStyle = teal;
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(targetX, trebleTop - lineSpacing * 1.5);
+    ctx.lineTo(targetX, bassBottom + lineSpacing * 1.5);
+    ctx.stroke();
+
+    const missBeat = beat - Math.max(0.24, tempo / 270);
+    notes.forEach(item => {
+      if (listeningMode && !item.listened && item.beat + listeningTriggerBeat(pixelsPerBeat) <= beat) {
+        item.listened = true;
+        playNote(item.note, item.duration);
+        flashKey(item.note, 'hit');
+      }
+      if (!item.hit && !item.missed && item.beat < missBeat) {
+        item.missed = true;
+        streak = 0;
+        setFeedback('Miss');
+        updateMetrics();
+      }
+    });
+
+    notes.forEach(item => {
+      const x = targetX + (item.beat - beat) * pixelsPerBeat;
+      if (x < -80 || x > scoreRightX + 110) return;
+      const staff = staffForNote(item.note);
+      const middleY = staff === bassStaffConfig ? bassMiddleY : trebleMiddleY;
+      const y = staffY(item.note, staff, middleY, stepY);
+      const isNear = Math.abs(x - targetX) < 20;
+      let noteColor;
+      if (item.hit) {
+        noteColor = teal;
+      } else if (item.missed) {
+        noteColor = '#a3a9b5';
+      } else if (isNear) {
+        noteColor = gold;
+      } else {
+        noteColor = coral;
+      }
+      const strokeColor = item.hit ? '#ffffff' : blue;
+      const labelColor = item.hit || !isNear ? '#ffffff' : '#172033';
+      const stemUp = diatonicNumber(item.note) < diatonicNumber(staff.anchor);
+      drawLedgerLines(x, item.note, staff, middleY, stepY, line);
+      drawMusicNote(x, y, item.duration, noteColor, strokeColor, labelColor, item.note.replace(/\d$/, ''), stemUp);
+    });
+
+    const complete = beat > notes[notes.length - 1].beat + 4;
+    if (complete && running) {
+      running = false;
+      startButton.innerHTML = '<i class="fa fa-play" aria-hidden="true"></i><span>Start</span>';
+      setFeedback('Done');
+    }
+
+    if (performance.now() - lastFeedbackAt > 1200 && !running && offsetBeat === 0) {
+      feedbackText.textContent = 'Ready';
+    }
+  }
+
+  function loop(now) {
+    draw(now);
+    if (running) updateMetrics();
+    animationId = requestAnimationFrame(loop);
+  }
+
+  startButton.addEventListener('click', startPractice);
+  resetButton.addEventListener('click', resetPractice);
+  listenButton.addEventListener('click', () => {
+    listeningMode = !listeningMode;
+    listenButton.setAttribute('aria-pressed', String(listeningMode));
+    setFeedback(listeningMode ? 'Listening' : 'Practice');
+    if (listeningMode) {
+      ensureAudio();
+      if (instrument === 'piano') {
+        warmPianoSamples();
+      }
+    }
+  });
+  tempoSlider.addEventListener('input', () => {
+    const now = performance.now();
+    offsetBeat = currentBeat(now);
+    startTime = now;
+    tempo = Number(tempoSlider.value);
+    tempoValue.textContent = String(tempo);
+  });
+
+  instrumentSelect.addEventListener('change', () => {
+    instrument = instrumentSelect.value;
+    const target = nextTarget(currentBeat());
+    setFeedback(instrument === 'organ' ? 'Organ' : 'Piano');
+    if (instrument === 'piano') {
+      warmPianoSamples();
+    }
+    playNote(target ? target.note : 'C4');
+  });
+
+  midiFileInput.addEventListener('change', async () => {
+    const file = midiFileInput.files && midiFileInput.files[0];
+    if (!file) return;
+    try {
+      const parsed = parseMidiFile(await file.arrayBuffer());
+      if (!parsed.tracks.length) {
+        setFeedback('No notes found');
+        return;
+      }
+      populateMidiTracks(parsed);
+    } catch (error) {
+      setFeedback('MIDI error');
+      window.console.error(error);
+    }
+  });
+
+  midiTrackSelect.addEventListener('change', () => {
+    if (!midiTrackLessons.length) return;
+    if (midiTrackSelect.value === '-1') {
+      loadLessonFromMidiEvents(midiTrackLessons.flatMap(track => track.notes), 'All notes');
+      return;
+    }
+    const track = midiTrackLessons[Number(midiTrackSelect.value)];
+    if (track) {
+      loadLessonFromMidiEvents(track.notes, track.name);
+    }
+  });
+
+  window.addEventListener('keydown', event => {
+    if (event.metaKey || event.ctrlKey || event.altKey || event.repeat) return;
+    const key = event.key.toLowerCase();
+    if (key === ' ') {
+      event.preventDefault();
+      startPractice();
+      return;
+    }
+    const noteName = codeToNote[event.code] || keyToNote[key];
+    if (!noteName) return;
+    event.preventDefault();
+    triggerNote(noteName);
+  });
+
+  window.addEventListener('resize', () => draw(performance.now()));
+
+  buildPiano();
+  resetPractice();
+  cancelAnimationFrame(animationId);
+  animationId = requestAnimationFrame(loop);
+})();
+</script>

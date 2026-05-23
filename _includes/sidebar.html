@@ -12,22 +12,6 @@
   <a class="sidebar-nav-item{% if page.url == site.url %} active{% endif %}" href="/">Home</a>
 
 
-    {% comment %}
-      The code below dynamically generates a sidebar nav of pages with
-      `layout: page` in the front-matter. See readme for usage.
-    {% endcomment %}
-
-    {% assign pages_list = site.pages | sort:"url" %}
-    {% for node in pages_list %}
-      {% if node.title != null %}
-        {% if node.layout == "page" %}
-          {% if node.url != '/rl-lab/' %}{% if node.url != '/cv-lab/' %}{% if node.url != '/queueing-lab/' %}{% if node.url != '/dynamical-systems-lab/' %}{% if node.url != '/optimization-lab/' %}
-            <a class="sidebar-nav-item{% if page.url == node.url %} active{% endif %}" href="{{ node.url }}">{{ node.title }}</a>
-          {% endif %}{% endif %}{% endif %}{% endif %}{% endif %}
-        {% endif %}
-      {% endif %}
-    {% endfor %}
-
     {% assign labs_open = false %}
     {% if page.url == '/rl-lab/' or page.url == '/cv-lab/' or page.url == '/queueing-lab/' or page.url == '/dynamical-systems-lab/' or page.url == '/optimization-lab/' %}
       {% assign labs_open = true %}
@@ -40,6 +24,10 @@
       <a class="sidebar-nav-item sidebar-nav-sub{% if page.url == '/dynamical-systems-lab/' %} active{% endif %}" href="/dynamical-systems-lab/">Dynamical Systems</a>
       <a class="sidebar-nav-item sidebar-nav-sub{% if page.url == '/optimization-lab/' %} active{% endif %}" href="/optimization-lab/">Optimization</a>
     </details>
+
+    <a class="sidebar-nav-item{% if page.url == '/calendar.html' %} active{% endif %}" href="/calendar.html">Calendar</a>
+    <a class="sidebar-nav-item{% if page.url == '/tags.html' %} active{% endif %}" href="/tags.html">Tags</a>
+    <a class="sidebar-nav-item{% if page.url == '/music/' %} active{% endif %}" href="/music/">Music</a>
 
   <a class="sidebar-nav-item{% if page.url == site.url %} active{% endif %}"
       href="https://www.linkedin.com/in/sc268">About me</a>

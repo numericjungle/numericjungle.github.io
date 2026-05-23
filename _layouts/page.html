@@ -4,7 +4,8 @@ layout: default
 
 <div class="page">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.0/MathJax.js?config=TeX-AMS-MML_HTMLorMML" type="text/javascript"></script>
+  {% unless page.hide_title %}
   <h1 class="page-title">{{ page.title }}</h1>
+  {% endunless %}
   {{ content | convert_mathjax}}
 </div>
-

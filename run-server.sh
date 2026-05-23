@@ -4,6 +4,18 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
+case "${LC_ALL:-${LC_CTYPE:-${LANG:-}}}" in
+  *UTF-8*|*utf8*) ;;
+  *)
+    export LANG="en_US.UTF-8"
+    export LC_ALL="en_US.UTF-8"
+    ;;
+esac
+
+if [[ "${RUBYOPT:-}" != *"-E"* ]]; then
+  export RUBYOPT="${RUBYOPT:-} -EUTF-8:UTF-8"
+fi
+
 # Helper: print header
 log() { printf "\033[1;34m[dev]\033[0m %s\n" "$*"; }
 warn() { printf "\033[1;33m[warn]\033[0m %s\n" "$*"; }
@@ -36,6 +48,26 @@ reset_incremental_state_if_needed() {
   if incremental_metadata_is_stale; then
     warn "Resetting stale Jekyll incremental metadata before starting the dev server."
     rm -f .jekyll-metadata
+  fi
+}
+
+file_hash() {
+  local file="$1"
+
+  if command -v md5 >/dev/null 2>&1; then
+    md5 -q "$file"
+  elif command -v md5sum >/dev/null 2>&1; then
+    md5sum "$file" | awk '{print $1}'
+  else
+    cksum "$file" | awk '{print $1}'
+  fi
+}
+
+bundle_manifest_hash() {
+  if [[ -f Gemfile.lock ]]; then
+    file_hash Gemfile.lock
+  else
+    printf 'no-lock:%s\n' "$(file_hash Gemfile)"
   fi
 }
 
@@ -110,21 +142,22 @@ if ! bundle config get path 2>/dev/null | grep -q 'vendor/bundle'; then
   bundle config set --local path 'vendor/bundle'
 fi
 
-# 4) Install gems — skip if Gemfile.lock hasn't changed since last successful install
+# 4) Install gems - skip if the dependency manifest hasn't changed since last successful install
 LOCK_HASH_FILE=".bundle/gemfile_lock_hash"
-CURRENT_HASH=$(md5 -q Gemfile.lock 2>/dev/null || md5sum Gemfile.lock 2>/dev/null | cut -d' ' -f1)
+CURRENT_HASH=$(bundle_manifest_hash)
 CACHED_HASH=$(cat "$LOCK_HASH_FILE" 2>/dev/null || true)
 
 if [[ "$CURRENT_HASH" != "$CACHED_HASH" ]]; then
-  log "Gemfile.lock changed — installing gems..."
+  log "Gem dependencies changed - installing gems..."
   if ! bundle install; then
     warn "Initial bundle install failed; attempting to update bundler and retry."
     bundle update --bundler || true
     bundle install
   fi
+  CURRENT_HASH=$(bundle_manifest_hash)
   echo "$CURRENT_HASH" > "$LOCK_HASH_FILE"
 else
-  log "Gems up to date (Gemfile.lock unchanged)."
+  log "Gems up to date (dependency manifest unchanged)."
 fi
 
 # 5) Script flags
